@@ -1,36 +1,48 @@
+# Dependencies
 node_modules/
-dist/
-*.tsbuildinfo
+
+# Environment / secrets
 .env
 .env.local
+.env.*.local
+
+# Database / runtime state
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
 .tavernos/secrets.json
 .tavernos/data/
+
+# Build caches (NOT dist/ - dist/ contains the compiled core engine)
+*.tsbuildinfo
+.vite/
 coverage/
+.turbo/
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS files
 .DS_Store
 Thumbs.db
-reference/
-node_modules_old_*/
-*.lock.yaml
-# pnpm-lock.yaml SHOULD be committed — lockfiles ensure reproducible installs
-!pnpm-lock.yaml
-*.tgz
-.vite/
+
+# Temp / backups
 temp/
-
-# Electron build artifacts
-release/
-dist-server/
-dist-node/
-electron/build/node/
-electron/runtime-modules/
-
-# Backup / temp files
 *.bak
 *.bak_*
 *.orig
+*.tgz
+reference/
+node_modules_old_*/
+
+# Electron installer output (NOT the built app dist/)
+release/
+electron/build/node/
+electron/runtime-modules/
+
+# Test files
 packages/studio/test_*.mjs
+test_*.py
+__pycache__/

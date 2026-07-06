@@ -1,0 +1,1 @@
+{"version":3,"file":"inner-voice.d.ts","sourceRoot":"","sources":["../../src/character-engine/inner-voice.ts"],"names":[],"mappings":"AAUA,OAAO,KAAK,EAAE,UAAU,EAAa,eAAe,EAAE,MAAM,YAAY,CAAC;AA2EzE,qBAAa,UAAU;IACrB;;;;;;;;;;;OAWG;IACH,QAAQ,CACN,WAAW,EAAE,MAAM,EACnB,IAAI,EAAE,UAAU,EAChB,WAAW,EAAE,MAAM,EAAE,EACrB,YAAY,EAAE,MAAM,GACnB,eAAe;CA4BnB"}

@@ -304,7 +304,7 @@ def stage_public():
     # --- Root files ---
     root_public_files = [
         "package.json", "pnpm-workspace.yaml", "tsconfig.base.json",
-        "tsconfig.server.json", ".npmrc", ".gitignore", ".dockerignore",
+        "tsconfig.server.json", ".npmrc", ".dockerignore",
         "Dockerfile", "docker-compose.yml", ".env.example",
     ]
     for f in root_public_files:
@@ -381,6 +381,60 @@ def stage_public():
     if cli_dist_src.exists():
         shutil.copytree(cli_dist_src, cli_dist_dst, dirs_exist_ok=True)
         print("  Copied cli/dist/")
+
+    # --- Public .gitignore ---
+    # Public repo NEEDS compiled dist/ (that's the core engine), so we write
+    # a custom .gitignore that only excludes dev artifacts, not build output.
+    public_gitignore = """# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Database / runtime state
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.tavernos/secrets.json
+.tavernos/data/
+
+# Build caches (NOT dist/ - dist/ contains the compiled core engine)
+*.tsbuildinfo
+.vite/
+coverage/
+.turbo/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temp / backups
+temp/
+*.bak
+*.bak_*
+*.orig
+*.tgz
+reference/
+node_modules_old_*/
+
+# Electron installer output (NOT the built app dist/)
+release/
+electron/build/node/
+electron/runtime-modules/
+
+# Test files
+packages/studio/test_*.mjs
+test_*.py
+__pycache__/
+"""
+    (PUBLISH_DIR / ".gitignore").write_text(public_gitignore, encoding="utf-8")
 
     # --- Public README ---
     readme = """# TavernOS
