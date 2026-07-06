@@ -1,84 +1,38 @@
-// packages/core/src/style/style-guide.ts
-// LLM-powered qualitative style guide generation.
-// Takes a reference text + statistical profile, outputs a human-readable
-// writing style guide that can be injected into the Writer agent's prompt.
-import { formatProfileSummary } from "./style-analyzer.js";
-/**
- * Generate a qualitative style guide from a reference text + statistical profile.
- *
- * The guide is a markdown document that tells the Writer agent HOW to write
- * in this style — sentence rhythm, vocabulary preferences, rhetorical
- * tendencies, paragraph structure, and what to avoid.
- *
- * @param client LLM client for guide generation.
- * @param model Model to use (e.g., "claude-sonnet-4-6").
- * @param text Reference text (first ~3000 chars used).
- * @param profile Statistical profile from analyzeStyle().
- * @param sourceName Optional name of the source/author.
- * @returns Markdown style guide string.
- */
-export async function generateStyleGuide(client, model, text, profile, sourceName) {
-    const langLabel = profile.language === "zh" ? "中文" : "English";
-    const sampleText = text.substring(0, 4000);
-    const systemPrompt = `你是一位专业的文学编辑和文体学专家。你的任务是分析一段参考文本的写作风格，生成一份详细、可执行的写作风格指南。
+import{formatProfileSummary as $}from"./style-analyzer.js";export async function generateStyleGuide(n,t,e,s,a){const r=s.language==="zh"?"\u4E2D\u6587":"English",o=e.substring(0,4e3),c=`\u4F60\u662F\u4E00\u4F4D\u4E13\u4E1A\u7684\u6587\u5B66\u7F16\u8F91\u548C\u6587\u4F53\u5B66\u4E13\u5BB6\u3002\u4F60\u7684\u4EFB\u52A1\u662F\u5206\u6790\u4E00\u6BB5\u53C2\u8003\u6587\u672C\u7684\u5199\u4F5C\u98CE\u683C\uFF0C\u751F\u6210\u4E00\u4EFD\u8BE6\u7EC6\u3001\u53EF\u6267\u884C\u7684\u5199\u4F5C\u98CE\u683C\u6307\u5357\u3002
 
-要求：
-1. 用中文输出（无论参考文本是中文还是英文）
-2. 输出为 Markdown 格式
-3. 指南必须具体、可执行，避免空泛描述
-4. 包含以下章节：
-   - 总体风格概述（1-2句）
-   - 句式特征（句长偏好、长短句交替规律）
-   - 词汇偏好（用词倾向、高频词类、应避免的词）
-   - 修辞倾向（常用修辞手法及密度）
-   - 段落结构（段落长度、开篇/收尾习惯）
-   - 节奏与韵律（叙事节奏、对话/叙述比）
-   - 情感与语气（整体基调、情感表达方式）
-   - 写作戒律（该风格下必须避免的做法）
+\u8981\u6C42\uFF1A
+1. \u7528\u4E2D\u6587\u8F93\u51FA\uFF08\u65E0\u8BBA\u53C2\u8003\u6587\u672C\u662F\u4E2D\u6587\u8FD8\u662F\u82F1\u6587\uFF09
+2. \u8F93\u51FA\u4E3A Markdown \u683C\u5F0F
+3. \u6307\u5357\u5FC5\u987B\u5177\u4F53\u3001\u53EF\u6267\u884C\uFF0C\u907F\u514D\u7A7A\u6CDB\u63CF\u8FF0
+4. \u5305\u542B\u4EE5\u4E0B\u7AE0\u8282\uFF1A
+   - \u603B\u4F53\u98CE\u683C\u6982\u8FF0\uFF081-2\u53E5\uFF09
+   - \u53E5\u5F0F\u7279\u5F81\uFF08\u53E5\u957F\u504F\u597D\u3001\u957F\u77ED\u53E5\u4EA4\u66FF\u89C4\u5F8B\uFF09
+   - \u8BCD\u6C47\u504F\u597D\uFF08\u7528\u8BCD\u503E\u5411\u3001\u9AD8\u9891\u8BCD\u7C7B\u3001\u5E94\u907F\u514D\u7684\u8BCD\uFF09
+   - \u4FEE\u8F9E\u503E\u5411\uFF08\u5E38\u7528\u4FEE\u8F9E\u624B\u6CD5\u53CA\u5BC6\u5EA6\uFF09
+   - \u6BB5\u843D\u7ED3\u6784\uFF08\u6BB5\u843D\u957F\u5EA6\u3001\u5F00\u7BC7/\u6536\u5C3E\u4E60\u60EF\uFF09
+   - \u8282\u594F\u4E0E\u97F5\u5F8B\uFF08\u53D9\u4E8B\u8282\u594F\u3001\u5BF9\u8BDD/\u53D9\u8FF0\u6BD4\uFF09
+   - \u60C5\u611F\u4E0E\u8BED\u6C14\uFF08\u6574\u4F53\u57FA\u8C03\u3001\u60C5\u611F\u8868\u8FBE\u65B9\u5F0F\uFF09
+   - \u5199\u4F5C\u6212\u5F8B\uFF08\u8BE5\u98CE\u683C\u4E0B\u5FC5\u987B\u907F\u514D\u7684\u505A\u6CD5\uFF09
 
-统计指纹（已由算法提取，供参考）：
-${formatProfileSummary(profile)}`;
-    const userPrompt = `请分析以下${langLabel}参考文本的写作风格，生成风格指南。
+\u7EDF\u8BA1\u6307\u7EB9\uFF08\u5DF2\u7531\u7B97\u6CD5\u63D0\u53D6\uFF0C\u4F9B\u53C2\u8003\uFF09\uFF1A
+${$(s)}`,g=`\u8BF7\u5206\u6790\u4EE5\u4E0B${r}\u53C2\u8003\u6587\u672C\u7684\u5199\u4F5C\u98CE\u683C\uFF0C\u751F\u6210\u98CE\u683C\u6307\u5357\u3002
 
-${sourceName ? `来源：${sourceName}` : ""}
+${a?`\u6765\u6E90\uFF1A${a}`:""}
 
-参考文本（节选）：
+\u53C2\u8003\u6587\u672C\uFF08\u8282\u9009\uFF09\uFF1A
 ---
-${sampleText}
+${o}
 ---
 
-请生成详细的写作风格指南。`;
-    const messages = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-    ];
-    const response = await client.chat(model, messages, {
-        temperature: 0.3,
-        maxTokens: 2000,
-    });
-    return response.content.trim();
-}
-/**
- * Build the style injection block for the Writer agent's prompt.
- * This is the text that gets appended to the storyBible context.
- *
- * @param guide The qualitative style guide (from generateStyleGuide).
- * @param profile The statistical profile (for numeric targets).
- * @returns Formatted injection string.
- */
-export function buildStyleInjection(guide, profile) {
-    const unit = profile.language === "zh" ? "字" : "词";
-    return `【文风仿写指南（必须遵循）】
-以下是目标写作风格的特征，请在写作中严格遵循：
+\u8BF7\u751F\u6210\u8BE6\u7EC6\u7684\u5199\u4F5C\u98CE\u683C\u6307\u5357\u3002`,u=[{role:"system",content:c},{role:"user",content:g}];return(await n.chat(t,u,{temperature:.3,maxTokens:2e3})).content.trim()}export function buildStyleInjection(n,t){const e=t.language==="zh"?"\u5B57":"\u8BCD";return`\u3010\u6587\u98CE\u4EFF\u5199\u6307\u5357\uFF08\u5FC5\u987B\u9075\u5FAA\uFF09\u3011
+\u4EE5\u4E0B\u662F\u76EE\u6807\u5199\u4F5C\u98CE\u683C\u7684\u7279\u5F81\uFF0C\u8BF7\u5728\u5199\u4F5C\u4E2D\u4E25\u683C\u9075\u5FAA\uFF1A
 
-${guide}
+${n}
 
 ---
-统计目标（硬性约束）：
-- 句长约 ${profile.avgSentenceLength}±${profile.sentenceLengthStdDev} ${unit}
-- 段落约 ${profile.avgParagraphLength} ${unit}
-- 词汇多样性 TTR 目标: ${profile.vocabularyDiversity}
-${profile.rhetoricalFeatures.length > 0 ? `- 必用修辞: ${profile.rhetoricalFeatures.join(", ")}` : ""}
-${profile.topPatterns.length > 0 ? `- 句首偏好: ${profile.topPatterns.join(", ")}` : ""}`;
-}
-//# sourceMappingURL=style-guide.js.map
+\u7EDF\u8BA1\u76EE\u6807\uFF08\u786C\u6027\u7EA6\u675F\uFF09\uFF1A
+- \u53E5\u957F\u7EA6 ${t.avgSentenceLength}\xB1${t.sentenceLengthStdDev} ${e}
+- \u6BB5\u843D\u7EA6 ${t.avgParagraphLength} ${e}
+- \u8BCD\u6C47\u591A\u6837\u6027 TTR \u76EE\u6807: ${t.vocabularyDiversity}
+${t.rhetoricalFeatures.length>0?`- \u5FC5\u7528\u4FEE\u8F9E: ${t.rhetoricalFeatures.join(", ")}`:""}
+${t.topPatterns.length>0?`- \u53E5\u9996\u504F\u597D: ${t.topPatterns.join(", ")}`:""}`}

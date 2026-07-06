@@ -14,23 +14,21 @@ module.exports = async function (context) {
 
   console.log("[after-pack] Starting cleanup...");
 
-  // 0. Obfuscate frontend JS assets in the packaged app output directory.
-  //    This runs BEFORE asar packaging, so the obfuscated files get packed.
-  //    The server bundle (resources/server/index.js) is already obfuscated
-  //    by build-server.cjs before electron-builder copies it, so we skip it here.
-  try {
-    const { obfuscateFrontendInApp } = require("./obfuscate-build.cjs");
-    console.log("[after-pack] Obfuscating frontend assets in app output...");
-    const result = obfuscateFrontendInApp(context.appOutDir);
-    if (result.failed > 0) {
-      console.warn(`[after-pack] WARNING: ${result.failed} frontend file(s) failed to obfuscate`);
-    } else {
-      console.log(`[after-pack] Frontend obfuscation complete: ${result.success} file(s)`);
-    }
-  } catch (err) {
-    console.warn("[after-pack] WARNING: Frontend obfuscation step failed:", err.message);
-    console.warn("[after-pack] Continuing with unobfuscated frontend assets.");
-  }
+  // 0. Obfuscate frontend JS assets (TEMPORARILY DISABLED for debugging)
+  // try {
+  //   const { obfuscateFrontendInApp } = require("./obfuscate-build.cjs");
+  //   console.log("[after-pack] Obfuscating frontend assets in app output...");
+  //   const result = obfuscateFrontendInApp(context.appOutDir);
+  //   if (result.failed > 0) {
+  //     console.warn(`[after-pack] WARNING: ${result.failed} frontend file(s) failed to obfuscate`);
+  //   } else {
+  //     console.log(`[after-pack] Frontend obfuscation complete: ${result.success} file(s)`);
+  //   }
+  // } catch (err) {
+  //   console.warn("[after-pack] WARNING: Frontend obfuscation step failed:", err.message);
+  //   console.warn("[after-pack] Continuing with unobfuscated frontend assets.");
+  // }
+  console.log("[after-pack] Frontend obfuscation disabled (debug mode)");
 
   // 1. Always remove and re-copy runtime-modules to ensure real files
   const runtimeModulesDir = path.join(resourcesDir, "runtime-modules");

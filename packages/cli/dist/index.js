@@ -1,30 +1,3 @@
 #!/usr/bin/env node
-// packages/cli/src/index.ts
-// TavernOS CLI entry point — registers all commands and parses argv.
-import { Command } from "commander";
-import { registerInitCommand } from "./commands/init.js";
-import { registerBookCommand } from "./commands/book.js";
-import { registerWriteCommand, registerDraftCommand } from "./commands/write.js";
-import { registerAuditCommand } from "./commands/audit.js";
-import { registerReviseCommand } from "./commands/revise.js";
-import { registerExportCommand } from "./commands/export.js";
-const program = new Command();
-program
-    .name("tavernos")
-    .description("AI 辅助创意写作平台 — 从项目初始化到章节生成、审核、修订、导出")
-    .version("0.1.0");
-// Register all commands
-registerInitCommand(program);
-registerBookCommand(program);
-registerWriteCommand(program);
-registerDraftCommand(program);
-registerAuditCommand(program);
-registerReviseCommand(program);
-registerExportCommand(program);
-// Top-level error handler: catch errors from async actions
-program.parseAsync(process.argv).catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`\u2717 ${msg}\n`);
-    process.exit(1);
-});
-//# sourceMappingURL=index.js.map
+import{Command as e}from"commander";import{registerInitCommand as t}from"./commands/init.js";import{registerBookCommand as s}from"./commands/book.js";import{registerWriteCommand as i,registerDraftCommand as n}from"./commands/write.js";import{registerAuditCommand as a}from"./commands/audit.js";import{registerReviseCommand as p}from"./commands/revise.js";import{registerExportCommand as d}from"./commands/export.js";const r=new e;r.name("tavernos").description("AI \u8F85\u52A9\u521B\u610F\u5199\u4F5C\u5E73\u53F0 \u2014 \u4ECE\u9879\u76EE\u521D\u59CB\u5316\u5230\u7AE0\u8282\u751F\u6210\u3001\u5BA1\u6838\u3001\u4FEE\u8BA2\u3001\u5BFC\u51FA").version("0.1.0"),t(r),s(r),i(r),n(r),a(r),p(r),d(r),r.parseAsync(process.argv).catch(o=>{const m=o instanceof Error?o.message:String(o);process.stderr.write(`\u2717 ${m}
+`),process.exit(1)});

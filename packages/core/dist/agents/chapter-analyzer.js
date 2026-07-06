@@ -1,283 +1,59 @@
-// packages/core/src/agents/chapter-analyzer.ts
-//
-// ChapterAnalyzer — unified LLM agent that combines the responsibilities of
-// the former Consolidator (StoryStateDelta extraction) and FactExtractor
-// (StoryFact extraction) into a SINGLE LLM call.
-//
-// This merger eliminates the redundant double-LLM-call pattern where two
-// agents read the same chapter content and produce structurally similar
-// outputs. The ChapterAnalyzer asks the LLM to produce a single JSON object
-// with two top-level keys:
-//   - "delta":  the StoryStateDelta (for Truth Files persistence)
-//   - "facts":  an array of ExtractedFact (for FactVault ingestion)
-//
-// Design principles:
-//   • Mirrors the factory/compose pattern of consolidator.ts and fact-extractor.ts
-//   • Defensive parsing: degrades gracefully on any parse failure
-//   • Each section (delta/facts) can independently succeed or fail
-//   • Backward-compatible: callers can access .delta and .facts separately
-import { StoryStateDeltaSchema, PlotThreadSchema, NewThreadCandidateSchema, } from "../models/story-state.js";
-import { createAgentRuntime } from "./base.js";
-import { parseAndValidate } from "./json-utils.js";
-import { buildTaxonomyText, coerceFact, parseFacts, } from "./fact-taxonomy.js";
-// ---------------------------------------------------------------------------
-// System prompt — unified extraction in a single LLM call
-// ---------------------------------------------------------------------------
-const SYSTEM_PROMPT = "你是一个章节分析智能体。你的任务是同时完成两项分析，并输出一个 JSON 对象：\n" +
-    "1. 故事状态增量（delta）— 用于更新全局故事状态\n" +
-    "2. 故事事实列表（facts）— 用于动态记忆库\n\n" +
-    "只输出有效的 JSON 对象，不要使用 markdown 代码块，不要添加任何解释文字。\n\n" +
-    "输出格式：\n" +
-    '{\n' +
-    '  "delta": { /* StoryStateDelta 对象 */ },\n' +
-    '  "facts": [ /* ExtractedFact 数组，可为空 */ ]\n' +
-    '}\n\n' +
-    "delta 字段说明（StoryStateDelta）：\n" +
-    '- chapter: 当前章节号\n' +
-    '- currentStatePatch: 当前状态补丁数组（subject/predicate/object 三元组）\n' +
-    '- hookOps: 伏笔操作 { upsert, mention, resolve, defer }\n' +
-    '- newHookCandidates: 新伏笔候选\n' +
-    '- chapterSummary: 章节摘要 { title, characters, events, stateChanges, hookActivity, mood, chapterType }\n' +
-    '- subplotOps, emotionalArcOps, characterMatrixOps: 可选\n' +
-    '- notes: 备注\n\n' +
-    `facts 字段说明（事实分类体系，domain 和 category 必须使用下列英文值）：\n${buildTaxonomyText()}\n\n` +
-    "每个 fact 对象包含：\n" +
-    '- domain: 上述 6 个域之一\n' +
-    '- category: 上述类别之一，必须属于所选 domain\n' +
-    '- label: 简短标签\n' +
-    '- content: 完整的事实陈述\n' +
-    '- weight: 数值 0-100，重要性\n' +
-    '- certainty: 数值 0-1，确信度\n' +
-    '- triggers: 字符串数组，用于检索的关键词\n' +
-    '- emotionalWeight: 数值 -1 到 1，情感权重\n\n' +
-    "抽取重点（facts）：\n" +
-    "- 人物身份/性格/能力/关系的揭示与变化\n" +
-    "- 世界观规则的揭示\n" +
-    "- 新地点的出现\n" +
-    "- 情节伏笔/悬念的埋设\n" +
-    "- 时间线里程碑\n" +
-    "- 主题冲突\n\n" +
-    "只提取本章新出现或有显著变化的事实，避免与已有事实重复。若本章无可提取事实，facts 输出空数组 []。";
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
-/**
- * Factory: build a ChapterAnalyzer agent by composing a shared runtime.
- *
- * Replaces the former separate createStateExtractor() + createFactExtractor()
- * pattern with a single unified LLM call that produces both the
- * StoryStateDelta (for Truth Files) and the ExtractedFact[] (for FactVault).
- *
- * On any parse failure, each section degrades independently:
- *   - delta failure → minimal valid delta with chapter number, deltaDegraded=true
- *   - facts failure → empty array, factsDegraded=true
- */
-export function createChapterAnalyzer(ctx) {
-    const runtime = createAgentRuntime(ctx);
-    const name = "chapter-analyzer";
-    async function analyze(input, options) {
-        const userContent = `## 第 ${input.chapter} 章\n\n${input.chapterContent}\n\n` +
-            `## 故事设定\n${input.storyBible}\n\n` +
-            `## 当前状态\n${input.currentState}\n\n` +
-            `## 活跃伏笔\n${input.activeHooks}\n\n` +
-            `## 已有事实摘要（避免重复）\n${input.existingFactsSummary}\n\n` +
-            `请同时提取故事状态增量（delta）和故事事实列表（facts），输出为 JSON 对象。delta 的 chapter 字段必须为 ${input.chapter}。`;
-        const messages = [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userContent },
-        ];
-        // Defaults for degraded fallback.
-        let delta = StoryStateDeltaSchema.parse({ chapter: input.chapter });
-        let facts = [];
-        let deltaDegraded = true;
-        let factsDegraded = true;
-        try {
-            const response = await runtime.chat(messages, options);
-            const raw = response.content.trim();
-            // Try to parse as a unified JSON object with "delta" and "facts" keys.
-            // Strategy:
-            // 1. Try parseAndValidate against a permissive schema { delta, facts }
-            // 2. If that fails, try parsing delta and facts separately from the
-            //    raw text (some LLMs may output them as separate JSON blocks).
-            // Attempt 1: unified object
-            try {
-                const unified = JSON.parse(raw.replace(/```(?:json)?\s*/gi, "").replace(/```/g, ""));
-                if (unified && typeof unified === "object") {
-                    // Parse delta
-                    if (unified.delta && typeof unified.delta === "object") {
-                        // First attempt: strict validation of the full delta
-                        const parsedDelta = parseAndValidate(JSON.stringify(unified.delta), StoryStateDeltaSchema);
-                        if (parsedDelta) {
-                            delta = parsedDelta;
-                            deltaDegraded = false;
-                        }
-                        else {
-                            // Fallback: aggressively repair common LLM type mismatches.
-                            // LLMs often return: strings instead of objects in arrays,
-                            // arrays instead of objects, missing required fields, etc.
-                            const rawDelta = typeof unified.delta === "object" && unified.delta !== null
-                                ? { ...unified.delta }
-                                : {};
-                            // Log the exact Zod validation errors for diagnosis.
-                            const diagResult = StoryStateDeltaSchema.safeParse(rawDelta);
-                            if (!diagResult.success) {
-                                const issues = diagResult.error.issues
-                                    .map((i) => `${i.path.join(".")}: ${i.message} (code=${i.code})`)
-                                    .slice(0, 10);
-                                console.warn(`[chapter-analyzer] delta Zod errors: ${issues.join("; ")}`);
-                            }
-                            // 1. Coerce chapter field (string → number)
-                            if (rawDelta.chapter !== undefined && typeof rawDelta.chapter === "string") {
-                                rawDelta.chapter = parseInt(rawDelta.chapter, 10);
-                            }
-                            if (rawDelta.chapter === undefined || isNaN(rawDelta.chapter)) {
-                                rawDelta.chapter = input.chapter;
-                            }
-                            // 2. Repair hookOps: filter out string elements, coerce numeric
-                            // string fields and Chinese status in object elements.
-                            const hookOps = rawDelta.hookOps;
-                            if (hookOps && Array.isArray(hookOps.upsert)) {
-                                hookOps.upsert = hookOps.upsert
-                                    .filter((t) => t && typeof t === "object")
-                                    .map((t) => {
-                                    const thread = { ...t };
-                                    for (const numField of ["startChapter", "lastAdvancedChapter"]) {
-                                        if (typeof thread[numField] === "string") {
-                                            thread[numField] = parseInt(thread[numField], 10);
-                                        }
-                                    }
-                                    const statusMap = {
-                                        "开放": "open", "进行中": "progressing", "延后": "deferred",
-                                        "已解决": "resolved", "完成": "resolved", "暂停": "deferred",
-                                    };
-                                    if (typeof thread.status === "string" && statusMap[thread.status]) {
-                                        thread.status = statusMap[thread.status];
-                                    }
-                                    return thread;
-                                })
-                                    .filter((t) => PlotThreadSchema.safeParse(t).success);
-                            }
-                            // Ensure hookOps arrays exist
-                            if (!hookOps || typeof hookOps !== "object") {
-                                rawDelta.hookOps = { upsert: [], mention: [], resolve: [], defer: [] };
-                            }
-                            else {
-                                for (const key of ["mention", "resolve", "defer"]) {
-                                    if (!Array.isArray(hookOps[key]))
-                                        hookOps[key] = [];
-                                }
-                            }
-                            // 3. Repair newHookCandidates: filter out string elements
-                            if (Array.isArray(rawDelta.newHookCandidates)) {
-                                rawDelta.newHookCandidates = rawDelta.newHookCandidates
-                                    .filter((t) => t && typeof t === "object")
-                                    .filter((t) => NewThreadCandidateSchema.safeParse(t).success);
-                            }
-                            else {
-                                rawDelta.newHookCandidates = [];
-                            }
-                            // 4. Repair chapterSummary: fix missing chapter, array → string
-                            const chapterSummary = rawDelta.chapterSummary;
-                            if (chapterSummary) {
-                                if (typeof chapterSummary.chapter === "string") {
-                                    chapterSummary.chapter = parseInt(chapterSummary.chapter, 10);
-                                }
-                                if (chapterSummary.chapter === undefined || isNaN(chapterSummary.chapter)) {
-                                    chapterSummary.chapter = input.chapter;
-                                }
-                                // LLMs often return string fields as arrays — coerce all
-                                // known string fields that should be joined.
-                                for (const strField of ["characters", "events", "stateChanges", "hookActivity", "mood", "chapterType", "title"]) {
-                                    if (Array.isArray(chapterSummary[strField])) {
-                                        chapterSummary[strField] = chapterSummary[strField]
-                                            .map(String).join(", ");
-                                    }
-                                }
-                            }
-                            // 5. Repair notes: string → array
-                            if (typeof rawDelta.notes === "string") {
-                                rawDelta.notes = [rawDelta.notes];
-                            }
-                            // 6. Repair currentStatePatch: array → undefined (can't safely coerce)
-                            if (Array.isArray(rawDelta.currentStatePatch)) {
-                                delete rawDelta.currentStatePatch;
-                            }
-                            // 7. Ensure array fields exist with defaults
-                            for (const key of ["subplotOps", "emotionalArcOps", "characterMatrixOps"]) {
-                                if (!Array.isArray(rawDelta[key]))
-                                    rawDelta[key] = [];
-                            }
-                            const retryParsed = parseAndValidate(JSON.stringify(rawDelta), StoryStateDeltaSchema);
-                            if (retryParsed) {
-                                delta = retryParsed;
-                                deltaDegraded = false;
-                                console.warn("[chapter-analyzer] delta recovered after aggressive repair");
-                            }
-                            else {
-                                // Final diagnosis: log remaining errors
-                                const finalDiag = StoryStateDeltaSchema.safeParse(rawDelta);
-                                if (!finalDiag.success) {
-                                    const remaining = finalDiag.error.issues
-                                        .map((i) => `${i.path.join(".")}: ${i.message}`)
-                                        .slice(0, 5);
-                                    console.warn(`[chapter-analyzer] delta still invalid after repair: ${remaining.join("; ")}`);
-                                }
-                                console.warn("[chapter-analyzer] delta validation failed even after aggressive repair — falling back to minimal delta");
-                            }
-                        }
-                    }
-                    // Parse facts
-                    if (Array.isArray(unified.facts)) {
-                        const parsedFacts = [];
-                        for (const f of unified.facts) {
-                            const fact = coerceFact(f);
-                            if (fact)
-                                parsedFacts.push(fact);
-                        }
-                        if (parsedFacts.length > 0 || Array.isArray(unified.facts)) {
-                            facts = parsedFacts;
-                            factsDegraded = false;
-                        }
-                    }
-                }
-            }
-            catch {
-                // Not a single JSON object — try separate parsing below.
-            }
-            // Attempt 2: if delta or facts still degraded, try parsing from
-            // the raw text independently (handles cases where LLM outputs
-            // two separate JSON blocks).
-            if (deltaDegraded) {
-                const parsedDelta = parseAndValidate(raw, StoryStateDeltaSchema);
-                if (parsedDelta) {
-                    delta = parsedDelta;
-                    deltaDegraded = false;
-                }
-            }
-            if (factsDegraded) {
-                const parsedFacts = parseFacts(raw);
-                if (parsedFacts !== null) {
-                    facts = parsedFacts;
-                    factsDegraded = false;
-                }
-            }
-            if (deltaDegraded) {
-                console.warn("[chapter-analyzer] delta validation failed — using minimal delta");
-            }
-        }
-        catch (e) {
-            // LLM call failed — keep degraded defaults, but surface the error so
-            // the caller can log/diagnose without a silent swallow.
-            return {
-                delta,
-                facts,
-                deltaDegraded,
-                factsDegraded,
-                error: e instanceof Error ? e.message : String(e),
-            };
-        }
-        return { delta, facts, deltaDegraded, factsDegraded };
-    }
-    return { name, analyze };
+import{StoryStateDeltaSchema as f,PlotThreadSchema as C,NewThreadCandidateSchema as N}from"../models/story-state.js";import{createAgentRuntime as P}from"./base.js";import{parseAndValidate as S}from"./json-utils.js";import{buildTaxonomyText as D,coerceFact as z,parseFacts as F}from"./fact-taxonomy.js";const T=`\u4F60\u662F\u4E00\u4E2A\u7AE0\u8282\u5206\u6790\u667A\u80FD\u4F53\u3002\u4F60\u7684\u4EFB\u52A1\u662F\u540C\u65F6\u5B8C\u6210\u4E24\u9879\u5206\u6790\uFF0C\u5E76\u8F93\u51FA\u4E00\u4E2A JSON \u5BF9\u8C61\uFF1A
+1. \u6545\u4E8B\u72B6\u6001\u589E\u91CF\uFF08delta\uFF09\u2014 \u7528\u4E8E\u66F4\u65B0\u5168\u5C40\u6545\u4E8B\u72B6\u6001
+2. \u6545\u4E8B\u4E8B\u5B9E\u5217\u8868\uFF08facts\uFF09\u2014 \u7528\u4E8E\u52A8\u6001\u8BB0\u5FC6\u5E93
+
+\u53EA\u8F93\u51FA\u6709\u6548\u7684 JSON \u5BF9\u8C61\uFF0C\u4E0D\u8981\u4F7F\u7528 markdown \u4EE3\u7801\u5757\uFF0C\u4E0D\u8981\u6DFB\u52A0\u4EFB\u4F55\u89E3\u91CA\u6587\u5B57\u3002
+
+\u8F93\u51FA\u683C\u5F0F\uFF1A
+{
+  "delta": { /* StoryStateDelta \u5BF9\u8C61 */ },
+  "facts": [ /* ExtractedFact \u6570\u7EC4\uFF0C\u53EF\u4E3A\u7A7A */ ]
 }
-//# sourceMappingURL=chapter-analyzer.js.map
+
+delta \u5B57\u6BB5\u8BF4\u660E\uFF08StoryStateDelta\uFF09\uFF1A
+- chapter: \u5F53\u524D\u7AE0\u8282\u53F7
+- currentStatePatch: \u5F53\u524D\u72B6\u6001\u8865\u4E01\u6570\u7EC4\uFF08subject/predicate/object \u4E09\u5143\u7EC4\uFF09
+- hookOps: \u4F0F\u7B14\u64CD\u4F5C { upsert, mention, resolve, defer }
+- newHookCandidates: \u65B0\u4F0F\u7B14\u5019\u9009
+- chapterSummary: \u7AE0\u8282\u6458\u8981 { title, characters, events, stateChanges, hookActivity, mood, chapterType }
+- subplotOps, emotionalArcOps, characterMatrixOps: \u53EF\u9009
+- notes: \u5907\u6CE8
+
+facts \u5B57\u6BB5\u8BF4\u660E\uFF08\u4E8B\u5B9E\u5206\u7C7B\u4F53\u7CFB\uFF0Cdomain \u548C category \u5FC5\u987B\u4F7F\u7528\u4E0B\u5217\u82F1\u6587\u503C\uFF09\uFF1A
+${D()}
+
+\u6BCF\u4E2A fact \u5BF9\u8C61\u5305\u542B\uFF1A
+- domain: \u4E0A\u8FF0 6 \u4E2A\u57DF\u4E4B\u4E00
+- category: \u4E0A\u8FF0\u7C7B\u522B\u4E4B\u4E00\uFF0C\u5FC5\u987B\u5C5E\u4E8E\u6240\u9009 domain
+- label: \u7B80\u77ED\u6807\u7B7E
+- content: \u5B8C\u6574\u7684\u4E8B\u5B9E\u9648\u8FF0
+- weight: \u6570\u503C 0-100\uFF0C\u91CD\u8981\u6027
+- certainty: \u6570\u503C 0-1\uFF0C\u786E\u4FE1\u5EA6
+- triggers: \u5B57\u7B26\u4E32\u6570\u7EC4\uFF0C\u7528\u4E8E\u68C0\u7D22\u7684\u5173\u952E\u8BCD
+- emotionalWeight: \u6570\u503C -1 \u5230 1\uFF0C\u60C5\u611F\u6743\u91CD
+
+\u62BD\u53D6\u91CD\u70B9\uFF08facts\uFF09\uFF1A
+- \u4EBA\u7269\u8EAB\u4EFD/\u6027\u683C/\u80FD\u529B/\u5173\u7CFB\u7684\u63ED\u793A\u4E0E\u53D8\u5316
+- \u4E16\u754C\u89C2\u89C4\u5219\u7684\u63ED\u793A
+- \u65B0\u5730\u70B9\u7684\u51FA\u73B0
+- \u60C5\u8282\u4F0F\u7B14/\u60AC\u5FF5\u7684\u57CB\u8BBE
+- \u65F6\u95F4\u7EBF\u91CC\u7A0B\u7891
+- \u4E3B\u9898\u51B2\u7A81
+
+\u53EA\u63D0\u53D6\u672C\u7AE0\u65B0\u51FA\u73B0\u6216\u6709\u663E\u8457\u53D8\u5316\u7684\u4E8B\u5B9E\uFF0C\u907F\u514D\u4E0E\u5DF2\u6709\u4E8B\u5B9E\u91CD\u590D\u3002\u82E5\u672C\u7AE0\u65E0\u53EF\u63D0\u53D6\u4E8B\u5B9E\uFF0Cfacts \u8F93\u51FA\u7A7A\u6570\u7EC4 []\u3002`;export function createChapterAnalyzer(v){const O=P(v),k="chapter-analyzer";async function w(n,$){const b=`## \u7B2C ${n.chapter} \u7AE0
+
+${n.chapterContent}
+
+## \u6545\u4E8B\u8BBE\u5B9A
+${n.storyBible}
+
+## \u5F53\u524D\u72B6\u6001
+${n.currentState}
+
+## \u6D3B\u8DC3\u4F0F\u7B14
+${n.activeHooks}
+
+## \u5DF2\u6709\u4E8B\u5B9E\u6458\u8981\uFF08\u907F\u514D\u91CD\u590D\uFF09
+${n.existingFactsSummary}
+
+\u8BF7\u540C\u65F6\u63D0\u53D6\u6545\u4E8B\u72B6\u6001\u589E\u91CF\uFF08delta\uFF09\u548C\u6545\u4E8B\u4E8B\u5B9E\u5217\u8868\uFF08facts\uFF09\uFF0C\u8F93\u51FA\u4E3A JSON \u5BF9\u8C61\u3002delta \u7684 chapter \u5B57\u6BB5\u5FC5\u987B\u4E3A ${n.chapter}\u3002`,j=[{role:"system",content:T},{role:"user",content:b}];let l=f.parse({chapter:n.chapter}),y=[],c=!0,p=!0;try{const u=(await O.chat(j,$)).content.trim();try{const a=JSON.parse(u.replace(/```(?:json)?\s*/gi,"").replace(/```/g,""));if(a&&typeof a=="object"){if(a.delta&&typeof a.delta=="object"){const i=S(JSON.stringify(a.delta),f);if(i)l=i,c=!1;else{const e=typeof a.delta=="object"&&a.delta!==null?{...a.delta}:{},d=f.safeParse(e);if(!d.success){const t=d.error.issues.map(r=>`${r.path.join(".")}: ${r.message} (code=${r.code})`).slice(0,10);console.warn(`[chapter-analyzer] delta Zod errors: ${t.join("; ")}`)}e.chapter!==void 0&&typeof e.chapter=="string"&&(e.chapter=parseInt(e.chapter,10)),(e.chapter===void 0||isNaN(e.chapter))&&(e.chapter=n.chapter);const o=e.hookOps;if(o&&Array.isArray(o.upsert)&&(o.upsert=o.upsert.filter(t=>t&&typeof t=="object").map(t=>{const r={...t};for(const g of["startChapter","lastAdvancedChapter"])typeof r[g]=="string"&&(r[g]=parseInt(r[g],10));const h={\u5F00\u653E:"open",\u8FDB\u884C\u4E2D:"progressing",\u5EF6\u540E:"deferred",\u5DF2\u89E3\u51B3:"resolved",\u5B8C\u6210:"resolved",\u6682\u505C:"deferred"};return typeof r.status=="string"&&h[r.status]&&(r.status=h[r.status]),r}).filter(t=>C.safeParse(t).success)),!o||typeof o!="object")e.hookOps={upsert:[],mention:[],resolve:[],defer:[]};else for(const t of["mention","resolve","defer"])Array.isArray(o[t])||(o[t]=[]);Array.isArray(e.newHookCandidates)?e.newHookCandidates=e.newHookCandidates.filter(t=>t&&typeof t=="object").filter(t=>N.safeParse(t).success):e.newHookCandidates=[];const s=e.chapterSummary;if(s){typeof s.chapter=="string"&&(s.chapter=parseInt(s.chapter,10)),(s.chapter===void 0||isNaN(s.chapter))&&(s.chapter=n.chapter);for(const t of["characters","events","stateChanges","hookActivity","mood","chapterType","title"])Array.isArray(s[t])&&(s[t]=s[t].map(String).join(", "))}typeof e.notes=="string"&&(e.notes=[e.notes]),Array.isArray(e.currentStatePatch)&&delete e.currentStatePatch;for(const t of["subplotOps","emotionalArcOps","characterMatrixOps"])Array.isArray(e[t])||(e[t]=[]);const A=S(JSON.stringify(e),f);if(A)l=A,c=!1,console.warn("[chapter-analyzer] delta recovered after aggressive repair");else{const t=f.safeParse(e);if(!t.success){const r=t.error.issues.map(h=>`${h.path.join(".")}: ${h.message}`).slice(0,5);console.warn(`[chapter-analyzer] delta still invalid after repair: ${r.join("; ")}`)}console.warn("[chapter-analyzer] delta validation failed even after aggressive repair \u2014 falling back to minimal delta")}}}if(Array.isArray(a.facts)){const i=[];for(const e of a.facts){const d=z(e);d&&i.push(d)}(i.length>0||Array.isArray(a.facts))&&(y=i,p=!1)}}}catch{}if(c){const a=S(u,f);a&&(l=a,c=!1)}if(p){const a=F(u);a!==null&&(y=a,p=!1)}c&&console.warn("[chapter-analyzer] delta validation failed \u2014 using minimal delta")}catch(m){return{delta:l,facts:y,deltaDegraded:c,factsDegraded:p,error:m instanceof Error?m.message:String(m)}}return{delta:l,facts:y,deltaDegraded:c,factsDegraded:p}}return{name:k,analyze:w}}

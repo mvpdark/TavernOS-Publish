@@ -1,278 +1,95 @@
-// Video Reviewer Agent (V2.0)
-//
-// V2.0 upgrades:
-//   - 9 review dimensions (added face_expr, body_lang, voice_visual_sync, compliance)
-//   - Acting diagnosis dictionary with concrete fix instructions
-//   - Compliance diagnosis dictionary for content risk detection
-//   - 5-grade scoring (A/B/C/D/F) instead of 3-grade
-//   - Post-fix suggestion field (distinguishes "can be fixed in post" vs "must reroll")
-//   - Reroll prompts must use concrete acting anchors, never vague criticism
-import { createAgentRuntime } from "./base.js";
-import { parseAndValidate } from "./json-utils.js";
-import { z } from "zod";
-// ---------------------------------------------------------------------------
-// Zod schema for robust JSON parsing
-// ---------------------------------------------------------------------------
-const VideoReviewIssueSchema = z.object({
-    severity: z.enum(["critical", "major", "minor"]),
-    dimension: z.enum([
-        "visual_quality",
-        "character_consistency",
-        "motion_naturalness",
-        "scene_compliance",
-        "face_expr",
-        "body_lang",
-        "voice_visual_sync",
-        "technical",
-        "compliance",
-    ]),
-    description: z.string(),
-    fixInstruction: z.string().optional(),
-});
-const VideoReviewResultSchema = z.object({
-    verdict: z.enum(["pass", "borderline", "fail"]),
-    score: z.number().min(0).max(100),
-    issues: z.array(VideoReviewIssueSchema),
-    postFixSuggestion: z.string().optional(),
-    rerollPrompt: z.string().optional(),
-    summary: z.string(),
-});
-// ---------------------------------------------------------------------------
-// Acting diagnosis dictionary — maps common acting failures to concrete fixes
-// ---------------------------------------------------------------------------
-const ACTING_DIAGNOSIS = {
-    "愤怒面瘫": {
-        desc: "愤怒场景但眉头未皱，眼神太平静，牙关未咬紧，面部像戴了面具",
-        fix: "加强表演：眉头紧锁眉心拧起，眼神锐利冰冷死死盯住对方，牙关咬紧下颌紧绷，拳头攥紧指节发白",
-    },
-    "委屈不哭": {
-        desc: "委屈/哭戏场景但眼眶未红，嘴唇未颤抖，表情太平淡",
-        fix: "加强表演：眼眶泛红含泪，嘴唇微微颤抖，紧咬下唇不让眼泪掉下来，手指攥紧衣角，眨眼频率变快忍泪",
-    },
-    "开心假笑": {
-        desc: "开心场景但只有嘴在笑，眼睛没有弯起，眼神不亮",
-        fix: "加强表演：眼睛弯成月牙，眼角有笑纹，眼神明亮有光，笑时肩膀轻微抖动，带自然笑音",
-    },
-    "惊恐不恐": {
-        desc: "惊恐场景但瞳孔未放大，眉毛未上扬，表情像正常发呆",
-        fix: "加强表演：眼睛瞪大瞳孔放大，眉毛高高上扬聚拢成八字，嘴巴微张倒吸冷气，身体瞬间僵硬，呼吸停顿一拍",
-    },
-    "霸总不霸": {
-        desc: "霸总/上位者场景但表情太软，眼神没有威慑力，姿态太放松",
-        fix: "加强表演：表情沉稳不怒自威，眼神深邃有掌控力，下颌线紧绷，单手插兜姿态挺拔，眼神从上往下审视对方",
-    },
-    "哭戏假哭": {
-        desc: "哭戏但没有眼泪，面部肌肉不动，只有声音在哭",
-        fix: "加强表演：眼泪从眼角滑落，眼眶鼻子通红，面部肌肉微微扭曲，肩膀耸动抽泣，胸口剧烈起伏",
-    },
-    "温柔不柔": {
-        desc: "温柔场景但表情太硬，眼神太冷，像在瞪人",
-        fix: "加强表演：眼神柔和温暖像有水光，嘴角带浅浅笑意，动作轻柔缓慢，说话时语气软下来",
-    },
-    "紧张不慌": {
-        desc: "紧张场景但身体太放松，手部无动作，表情太平静",
-        fix: "加强表演：手指不安绞动或摸鼻子，频繁吞咽口水，眼神躲闪不敢直视，额头微微冒汗，呼吸浅快",
-    },
-    "声画脱节": {
-        desc: "台词是怒吼但面部表情平静/台词是哭腔但脸在笑/声音和画面情绪不匹配",
-        fix: "修正表演：说话时表情必须贴合台词情绪，面部微表情和声音情绪保持一致",
-    },
-};
-// ---------------------------------------------------------------------------
-// Compliance diagnosis dictionary — maps common compliance risks to concrete fixes
-// ---------------------------------------------------------------------------
-const COMPLIANCE_DIAGNOSIS = {
-    "品牌logo暴露": {
-        desc: "画面中可见清晰的品牌商标、logo或产品包装（非剧情需要的虚构品牌）",
-        fix: "遮挡或模糊处理画面中的品牌标识区域，或重新生成避免品牌元素出现，替换为虚构品牌名称",
-    },
-    "政治符号误用": {
-        desc: "画面中出现国旗/国徽/领导人形象/政治标语等政治符号且使用方式不当",
-        fix: "移除政治符号元素，重新生成不含政治敏感内容的画面，改用中性背景",
-    },
-    "色情裸露": {
-        desc: "画面中出现裸露、色情暗示、过度暴露的身体部位或性暗示动作",
-        fix: "调整服装为保守款式，移除性暗示动作，重新生成符合平台审核的内容",
-    },
-    "暴力血腥": {
-        desc: "画面中出现过度暴力、血腥、断肢、内脏、真实武器伤害等过激内容",
-        fix: "弱化暴力表现，移除血腥画面，改为暗示性镜头或远景处理，重新生成",
-    },
-    "广告法违规": {
-        desc: "台词或画面中出现绝对化用语（最/第一/国家级）或虚假宣传暗示",
-        fix: "修改台词删除绝对化用语，改为客观描述，避免疗效/功效性承诺表述",
-    },
-    "版权角色": {
-        desc: "画面中出现受版权保护的知名角色形象（动漫/影视/游戏角色）",
-        fix: "重新设计原创角色形象，避免与已知IP角色相似，修改发型/服装/特征",
-    },
-    "价值观风险": {
-        desc: "画面或内容存在歧视、侮辱、低俗、不良引导等价值观问题",
-        fix: "调整内容方向，移除歧视性/侮辱性元素，传递正向价值观，重新生成",
-    },
-    "平台违规": {
-        desc: "内容触犯短视频平台（抖音/快手/B站）常见拒审规则，如危险行为模仿、虚假信息等",
-        fix: "根据平台规则调整内容，移除违规元素，确保符合平台社区规范，重新生成",
-    },
-    "敏感地标": {
-        desc: "画面中出现敏感政治地标建筑或军事设施等敏感场景",
-        fix: "替换为虚构场景或普通背景，避免敏感地标出现，重新生成",
-    },
-    "未成年风险": {
-        desc: "画面中涉及未成年人形象出现在不适宜的场景或内容中",
-        fix: "调整角色设定为成年人，移除涉及未成年人的不适宜内容，重新生成",
-    },
-};
-// ---------------------------------------------------------------------------
-// Prompt builder
-// ---------------------------------------------------------------------------
-function buildReviewPrompt(params) {
-    const { clip, scriptContext, referenceImages } = params;
-    const refNote = referenceImages.length > 0
-        ? `参考图角色/场景：${referenceImages.length}张参考图已提供（包含角色头像、场景图），请检查视频人物是否与参考图一致。`
-        : "无参考图（请基于scriptContext判断角色一致性）。";
-    return `你是顶级AI短剧质检总监兼表演指导。请审核以下AI生成的视频片段。
+import{createAgentRuntime as m}from"./base.js";import{parseAndValidate as p}from"./json-utils.js";import{z as e}from"zod";const d=e.object({severity:e.enum(["critical","major","minor"]),dimension:e.enum(["visual_quality","character_consistency","motion_naturalness","scene_compliance","face_expr","body_lang","voice_visual_sync","technical","compliance"]),description:e.string(),fixInstruction:e.string().optional()}),f=e.object({verdict:e.enum(["pass","borderline","fail"]),score:e.number().min(0).max(100),issues:e.array(d),postFixSuggestion:e.string().optional(),rerollPrompt:e.string().optional(),summary:e.string()}),u={\u6124\u6012\u9762\u762B:{desc:"\u6124\u6012\u573A\u666F\u4F46\u7709\u5934\u672A\u76B1\uFF0C\u773C\u795E\u592A\u5E73\u9759\uFF0C\u7259\u5173\u672A\u54AC\u7D27\uFF0C\u9762\u90E8\u50CF\u6234\u4E86\u9762\u5177",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u7709\u5934\u7D27\u9501\u7709\u5FC3\u62E7\u8D77\uFF0C\u773C\u795E\u9510\u5229\u51B0\u51B7\u6B7B\u6B7B\u76EF\u4F4F\u5BF9\u65B9\uFF0C\u7259\u5173\u54AC\u7D27\u4E0B\u988C\u7D27\u7EF7\uFF0C\u62F3\u5934\u6525\u7D27\u6307\u8282\u53D1\u767D"},\u59D4\u5C48\u4E0D\u54ED:{desc:"\u59D4\u5C48/\u54ED\u620F\u573A\u666F\u4F46\u773C\u7736\u672A\u7EA2\uFF0C\u5634\u5507\u672A\u98A4\u6296\uFF0C\u8868\u60C5\u592A\u5E73\u6DE1",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u773C\u7736\u6CDB\u7EA2\u542B\u6CEA\uFF0C\u5634\u5507\u5FAE\u5FAE\u98A4\u6296\uFF0C\u7D27\u54AC\u4E0B\u5507\u4E0D\u8BA9\u773C\u6CEA\u6389\u4E0B\u6765\uFF0C\u624B\u6307\u6525\u7D27\u8863\u89D2\uFF0C\u7728\u773C\u9891\u7387\u53D8\u5FEB\u5FCD\u6CEA"},\u5F00\u5FC3\u5047\u7B11:{desc:"\u5F00\u5FC3\u573A\u666F\u4F46\u53EA\u6709\u5634\u5728\u7B11\uFF0C\u773C\u775B\u6CA1\u6709\u5F2F\u8D77\uFF0C\u773C\u795E\u4E0D\u4EAE",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u773C\u775B\u5F2F\u6210\u6708\u7259\uFF0C\u773C\u89D2\u6709\u7B11\u7EB9\uFF0C\u773C\u795E\u660E\u4EAE\u6709\u5149\uFF0C\u7B11\u65F6\u80A9\u8180\u8F7B\u5FAE\u6296\u52A8\uFF0C\u5E26\u81EA\u7136\u7B11\u97F3"},\u60CA\u6050\u4E0D\u6050:{desc:"\u60CA\u6050\u573A\u666F\u4F46\u77B3\u5B54\u672A\u653E\u5927\uFF0C\u7709\u6BDB\u672A\u4E0A\u626C\uFF0C\u8868\u60C5\u50CF\u6B63\u5E38\u53D1\u5446",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u773C\u775B\u77AA\u5927\u77B3\u5B54\u653E\u5927\uFF0C\u7709\u6BDB\u9AD8\u9AD8\u4E0A\u626C\u805A\u62E2\u6210\u516B\u5B57\uFF0C\u5634\u5DF4\u5FAE\u5F20\u5012\u5438\u51B7\u6C14\uFF0C\u8EAB\u4F53\u77AC\u95F4\u50F5\u786C\uFF0C\u547C\u5438\u505C\u987F\u4E00\u62CD"},\u9738\u603B\u4E0D\u9738:{desc:"\u9738\u603B/\u4E0A\u4F4D\u8005\u573A\u666F\u4F46\u8868\u60C5\u592A\u8F6F\uFF0C\u773C\u795E\u6CA1\u6709\u5A01\u6151\u529B\uFF0C\u59FF\u6001\u592A\u653E\u677E",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u8868\u60C5\u6C89\u7A33\u4E0D\u6012\u81EA\u5A01\uFF0C\u773C\u795E\u6DF1\u9083\u6709\u638C\u63A7\u529B\uFF0C\u4E0B\u988C\u7EBF\u7D27\u7EF7\uFF0C\u5355\u624B\u63D2\u515C\u59FF\u6001\u633A\u62D4\uFF0C\u773C\u795E\u4ECE\u4E0A\u5F80\u4E0B\u5BA1\u89C6\u5BF9\u65B9"},\u54ED\u620F\u5047\u54ED:{desc:"\u54ED\u620F\u4F46\u6CA1\u6709\u773C\u6CEA\uFF0C\u9762\u90E8\u808C\u8089\u4E0D\u52A8\uFF0C\u53EA\u6709\u58F0\u97F3\u5728\u54ED",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u773C\u6CEA\u4ECE\u773C\u89D2\u6ED1\u843D\uFF0C\u773C\u7736\u9F3B\u5B50\u901A\u7EA2\uFF0C\u9762\u90E8\u808C\u8089\u5FAE\u5FAE\u626D\u66F2\uFF0C\u80A9\u8180\u8038\u52A8\u62BD\u6CE3\uFF0C\u80F8\u53E3\u5267\u70C8\u8D77\u4F0F"},\u6E29\u67D4\u4E0D\u67D4:{desc:"\u6E29\u67D4\u573A\u666F\u4F46\u8868\u60C5\u592A\u786C\uFF0C\u773C\u795E\u592A\u51B7\uFF0C\u50CF\u5728\u77AA\u4EBA",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u773C\u795E\u67D4\u548C\u6E29\u6696\u50CF\u6709\u6C34\u5149\uFF0C\u5634\u89D2\u5E26\u6D45\u6D45\u7B11\u610F\uFF0C\u52A8\u4F5C\u8F7B\u67D4\u7F13\u6162\uFF0C\u8BF4\u8BDD\u65F6\u8BED\u6C14\u8F6F\u4E0B\u6765"},\u7D27\u5F20\u4E0D\u614C:{desc:"\u7D27\u5F20\u573A\u666F\u4F46\u8EAB\u4F53\u592A\u653E\u677E\uFF0C\u624B\u90E8\u65E0\u52A8\u4F5C\uFF0C\u8868\u60C5\u592A\u5E73\u9759",fix:"\u52A0\u5F3A\u8868\u6F14\uFF1A\u624B\u6307\u4E0D\u5B89\u7EDE\u52A8\u6216\u6478\u9F3B\u5B50\uFF0C\u9891\u7E41\u541E\u54BD\u53E3\u6C34\uFF0C\u773C\u795E\u8EB2\u95EA\u4E0D\u6562\u76F4\u89C6\uFF0C\u989D\u5934\u5FAE\u5FAE\u5192\u6C57\uFF0C\u547C\u5438\u6D45\u5FEB"},\u58F0\u753B\u8131\u8282:{desc:"\u53F0\u8BCD\u662F\u6012\u543C\u4F46\u9762\u90E8\u8868\u60C5\u5E73\u9759/\u53F0\u8BCD\u662F\u54ED\u8154\u4F46\u8138\u5728\u7B11/\u58F0\u97F3\u548C\u753B\u9762\u60C5\u7EEA\u4E0D\u5339\u914D",fix:"\u4FEE\u6B63\u8868\u6F14\uFF1A\u8BF4\u8BDD\u65F6\u8868\u60C5\u5FC5\u987B\u8D34\u5408\u53F0\u8BCD\u60C5\u7EEA\uFF0C\u9762\u90E8\u5FAE\u8868\u60C5\u548C\u58F0\u97F3\u60C5\u7EEA\u4FDD\u6301\u4E00\u81F4"}},x={\u54C1\u724Clogo\u66B4\u9732:{desc:"\u753B\u9762\u4E2D\u53EF\u89C1\u6E05\u6670\u7684\u54C1\u724C\u5546\u6807\u3001logo\u6216\u4EA7\u54C1\u5305\u88C5\uFF08\u975E\u5267\u60C5\u9700\u8981\u7684\u865A\u6784\u54C1\u724C\uFF09",fix:"\u906E\u6321\u6216\u6A21\u7CCA\u5904\u7406\u753B\u9762\u4E2D\u7684\u54C1\u724C\u6807\u8BC6\u533A\u57DF\uFF0C\u6216\u91CD\u65B0\u751F\u6210\u907F\u514D\u54C1\u724C\u5143\u7D20\u51FA\u73B0\uFF0C\u66FF\u6362\u4E3A\u865A\u6784\u54C1\u724C\u540D\u79F0"},\u653F\u6CBB\u7B26\u53F7\u8BEF\u7528:{desc:"\u753B\u9762\u4E2D\u51FA\u73B0\u56FD\u65D7/\u56FD\u5FBD/\u9886\u5BFC\u4EBA\u5F62\u8C61/\u653F\u6CBB\u6807\u8BED\u7B49\u653F\u6CBB\u7B26\u53F7\u4E14\u4F7F\u7528\u65B9\u5F0F\u4E0D\u5F53",fix:"\u79FB\u9664\u653F\u6CBB\u7B26\u53F7\u5143\u7D20\uFF0C\u91CD\u65B0\u751F\u6210\u4E0D\u542B\u653F\u6CBB\u654F\u611F\u5185\u5BB9\u7684\u753B\u9762\uFF0C\u6539\u7528\u4E2D\u6027\u80CC\u666F"},\u8272\u60C5\u88F8\u9732:{desc:"\u753B\u9762\u4E2D\u51FA\u73B0\u88F8\u9732\u3001\u8272\u60C5\u6697\u793A\u3001\u8FC7\u5EA6\u66B4\u9732\u7684\u8EAB\u4F53\u90E8\u4F4D\u6216\u6027\u6697\u793A\u52A8\u4F5C",fix:"\u8C03\u6574\u670D\u88C5\u4E3A\u4FDD\u5B88\u6B3E\u5F0F\uFF0C\u79FB\u9664\u6027\u6697\u793A\u52A8\u4F5C\uFF0C\u91CD\u65B0\u751F\u6210\u7B26\u5408\u5E73\u53F0\u5BA1\u6838\u7684\u5185\u5BB9"},\u66B4\u529B\u8840\u8165:{desc:"\u753B\u9762\u4E2D\u51FA\u73B0\u8FC7\u5EA6\u66B4\u529B\u3001\u8840\u8165\u3001\u65AD\u80A2\u3001\u5185\u810F\u3001\u771F\u5B9E\u6B66\u5668\u4F24\u5BB3\u7B49\u8FC7\u6FC0\u5185\u5BB9",fix:"\u5F31\u5316\u66B4\u529B\u8868\u73B0\uFF0C\u79FB\u9664\u8840\u8165\u753B\u9762\uFF0C\u6539\u4E3A\u6697\u793A\u6027\u955C\u5934\u6216\u8FDC\u666F\u5904\u7406\uFF0C\u91CD\u65B0\u751F\u6210"},\u5E7F\u544A\u6CD5\u8FDD\u89C4:{desc:"\u53F0\u8BCD\u6216\u753B\u9762\u4E2D\u51FA\u73B0\u7EDD\u5BF9\u5316\u7528\u8BED\uFF08\u6700/\u7B2C\u4E00/\u56FD\u5BB6\u7EA7\uFF09\u6216\u865A\u5047\u5BA3\u4F20\u6697\u793A",fix:"\u4FEE\u6539\u53F0\u8BCD\u5220\u9664\u7EDD\u5BF9\u5316\u7528\u8BED\uFF0C\u6539\u4E3A\u5BA2\u89C2\u63CF\u8FF0\uFF0C\u907F\u514D\u7597\u6548/\u529F\u6548\u6027\u627F\u8BFA\u8868\u8FF0"},\u7248\u6743\u89D2\u8272:{desc:"\u753B\u9762\u4E2D\u51FA\u73B0\u53D7\u7248\u6743\u4FDD\u62A4\u7684\u77E5\u540D\u89D2\u8272\u5F62\u8C61\uFF08\u52A8\u6F2B/\u5F71\u89C6/\u6E38\u620F\u89D2\u8272\uFF09",fix:"\u91CD\u65B0\u8BBE\u8BA1\u539F\u521B\u89D2\u8272\u5F62\u8C61\uFF0C\u907F\u514D\u4E0E\u5DF2\u77E5IP\u89D2\u8272\u76F8\u4F3C\uFF0C\u4FEE\u6539\u53D1\u578B/\u670D\u88C5/\u7279\u5F81"},\u4EF7\u503C\u89C2\u98CE\u9669:{desc:"\u753B\u9762\u6216\u5185\u5BB9\u5B58\u5728\u6B67\u89C6\u3001\u4FAE\u8FB1\u3001\u4F4E\u4FD7\u3001\u4E0D\u826F\u5F15\u5BFC\u7B49\u4EF7\u503C\u89C2\u95EE\u9898",fix:"\u8C03\u6574\u5185\u5BB9\u65B9\u5411\uFF0C\u79FB\u9664\u6B67\u89C6\u6027/\u4FAE\u8FB1\u6027\u5143\u7D20\uFF0C\u4F20\u9012\u6B63\u5411\u4EF7\u503C\u89C2\uFF0C\u91CD\u65B0\u751F\u6210"},\u5E73\u53F0\u8FDD\u89C4:{desc:"\u5185\u5BB9\u89E6\u72AF\u77ED\u89C6\u9891\u5E73\u53F0\uFF08\u6296\u97F3/\u5FEB\u624B/B\u7AD9\uFF09\u5E38\u89C1\u62D2\u5BA1\u89C4\u5219\uFF0C\u5982\u5371\u9669\u884C\u4E3A\u6A21\u4EFF\u3001\u865A\u5047\u4FE1\u606F\u7B49",fix:"\u6839\u636E\u5E73\u53F0\u89C4\u5219\u8C03\u6574\u5185\u5BB9\uFF0C\u79FB\u9664\u8FDD\u89C4\u5143\u7D20\uFF0C\u786E\u4FDD\u7B26\u5408\u5E73\u53F0\u793E\u533A\u89C4\u8303\uFF0C\u91CD\u65B0\u751F\u6210"},\u654F\u611F\u5730\u6807:{desc:"\u753B\u9762\u4E2D\u51FA\u73B0\u654F\u611F\u653F\u6CBB\u5730\u6807\u5EFA\u7B51\u6216\u519B\u4E8B\u8BBE\u65BD\u7B49\u654F\u611F\u573A\u666F",fix:"\u66FF\u6362\u4E3A\u865A\u6784\u573A\u666F\u6216\u666E\u901A\u80CC\u666F\uFF0C\u907F\u514D\u654F\u611F\u5730\u6807\u51FA\u73B0\uFF0C\u91CD\u65B0\u751F\u6210"},\u672A\u6210\u5E74\u98CE\u9669:{desc:"\u753B\u9762\u4E2D\u6D89\u53CA\u672A\u6210\u5E74\u4EBA\u5F62\u8C61\u51FA\u73B0\u5728\u4E0D\u9002\u5B9C\u7684\u573A\u666F\u6216\u5185\u5BB9\u4E2D",fix:"\u8C03\u6574\u89D2\u8272\u8BBE\u5B9A\u4E3A\u6210\u5E74\u4EBA\uFF0C\u79FB\u9664\u6D89\u53CA\u672A\u6210\u5E74\u4EBA\u7684\u4E0D\u9002\u5B9C\u5185\u5BB9\uFF0C\u91CD\u65B0\u751F\u6210"}};function g(c){const{clip:r,scriptContext:n,referenceImages:s}=c,a=s.length>0?`\u53C2\u8003\u56FE\u89D2\u8272/\u573A\u666F\uFF1A${s.length}\u5F20\u53C2\u8003\u56FE\u5DF2\u63D0\u4F9B\uFF08\u5305\u542B\u89D2\u8272\u5934\u50CF\u3001\u573A\u666F\u56FE\uFF09\uFF0C\u8BF7\u68C0\u67E5\u89C6\u9891\u4EBA\u7269\u662F\u5426\u4E0E\u53C2\u8003\u56FE\u4E00\u81F4\u3002`:"\u65E0\u53C2\u8003\u56FE\uFF08\u8BF7\u57FA\u4E8EscriptContext\u5224\u65AD\u89D2\u8272\u4E00\u81F4\u6027\uFF09\u3002";return`\u4F60\u662F\u9876\u7EA7AI\u77ED\u5267\u8D28\u68C0\u603B\u76D1\u517C\u8868\u6F14\u6307\u5BFC\u3002\u8BF7\u5BA1\u6838\u4EE5\u4E0BAI\u751F\u6210\u7684\u89C6\u9891\u7247\u6BB5\u3002
 
-## 审核维度（共9维）
+## \u5BA1\u6838\u7EF4\u5EA6\uFF08\u51719\u7EF4\uFF09
 
-### 技术维度（5项）
-1. **visual_quality（画面质量）**：分辨率、清晰度、伪影、噪点、闪烁、帧间一致性、黑帧/花帧
-2. **character_consistency（角色一致性）**：与参考图脸型/发型/服装/年龄匹配，跨帧脸部稳定，无变脸/换人种
-3. **motion_naturalness（动作自然度）**：肢体运动流畅，无扭曲/穿模/多指/缺指/鬼畜抖动/反关节/漂浮感
-4. **scene_compliance（场景匹配）**：场景/道具/光线是否匹配提示词，运镜是否符合要求，有无突兀跳变
-5. **technical（技术合规）**：时长4-15秒、无水印、无UI、无多宫格、无故事板线稿残留
+### \u6280\u672F\u7EF4\u5EA6\uFF085\u9879\uFF09
+1. **visual_quality\uFF08\u753B\u9762\u8D28\u91CF\uFF09**\uFF1A\u5206\u8FA8\u7387\u3001\u6E05\u6670\u5EA6\u3001\u4F2A\u5F71\u3001\u566A\u70B9\u3001\u95EA\u70C1\u3001\u5E27\u95F4\u4E00\u81F4\u6027\u3001\u9ED1\u5E27/\u82B1\u5E27
+2. **character_consistency\uFF08\u89D2\u8272\u4E00\u81F4\u6027\uFF09**\uFF1A\u4E0E\u53C2\u8003\u56FE\u8138\u578B/\u53D1\u578B/\u670D\u88C5/\u5E74\u9F84\u5339\u914D\uFF0C\u8DE8\u5E27\u8138\u90E8\u7A33\u5B9A\uFF0C\u65E0\u53D8\u8138/\u6362\u4EBA\u79CD
+3. **motion_naturalness\uFF08\u52A8\u4F5C\u81EA\u7136\u5EA6\uFF09**\uFF1A\u80A2\u4F53\u8FD0\u52A8\u6D41\u7545\uFF0C\u65E0\u626D\u66F2/\u7A7F\u6A21/\u591A\u6307/\u7F3A\u6307/\u9B3C\u755C\u6296\u52A8/\u53CD\u5173\u8282/\u6F02\u6D6E\u611F
+4. **scene_compliance\uFF08\u573A\u666F\u5339\u914D\uFF09**\uFF1A\u573A\u666F/\u9053\u5177/\u5149\u7EBF\u662F\u5426\u5339\u914D\u63D0\u793A\u8BCD\uFF0C\u8FD0\u955C\u662F\u5426\u7B26\u5408\u8981\u6C42\uFF0C\u6709\u65E0\u7A81\u5140\u8DF3\u53D8
+5. **technical\uFF08\u6280\u672F\u5408\u89C4\uFF09**\uFF1A\u65F6\u957F4-15\u79D2\u3001\u65E0\u6C34\u5370\u3001\u65E0UI\u3001\u65E0\u591A\u5BAB\u683C\u3001\u65E0\u6545\u4E8B\u677F\u7EBF\u7A3F\u6B8B\u7559
 
-### 演技维度（3项，核心！）
-6. **face_expr（面部表演）**：眉毛/眼睛/嘴巴/下颌是否有符合情绪的微表情
-   - 愤怒场景：必须有眉头紧锁/眼神锐利/牙关咬紧
-   - 委屈场景：必须有眼眶泛红/嘴唇微颤/眼神下垂
-   - 开心场景：必须有眼睛弯起/嘴角上扬/眼神明亮
-   - 惊恐场景：必须有瞳孔放大/眉毛上扬/嘴巴微张
-   - 霸总场景：必须有眼神锐利/下颌紧绷/表情沉稳
-   - 面瘫检查：情绪强烈场景但脸部完全无表情变化，直接fail
-7. **body_lang（肢体与手部表演）**：拳头/手指/肩膀/身体姿态是否传达情绪
-   - 愤怒：拳头攥紧/身体前倾/肩膀绷紧
-   - 委屈：攥衣角/缩肩/擦泪/咬唇
-   - 紧张：手指绞动/摸鼻子/蹭裤子/频繁吞咽
-   - 手部崩坏检查：手指数量/形态正常，无穿模扭曲
-8. **voice_visual_sync（声画同步）**：口型是否与台词匹配，说话时表情是否符合台词情绪
+### \u6F14\u6280\u7EF4\u5EA6\uFF083\u9879\uFF0C\u6838\u5FC3\uFF01\uFF09
+6. **face_expr\uFF08\u9762\u90E8\u8868\u6F14\uFF09**\uFF1A\u7709\u6BDB/\u773C\u775B/\u5634\u5DF4/\u4E0B\u988C\u662F\u5426\u6709\u7B26\u5408\u60C5\u7EEA\u7684\u5FAE\u8868\u60C5
+   - \u6124\u6012\u573A\u666F\uFF1A\u5FC5\u987B\u6709\u7709\u5934\u7D27\u9501/\u773C\u795E\u9510\u5229/\u7259\u5173\u54AC\u7D27
+   - \u59D4\u5C48\u573A\u666F\uFF1A\u5FC5\u987B\u6709\u773C\u7736\u6CDB\u7EA2/\u5634\u5507\u5FAE\u98A4/\u773C\u795E\u4E0B\u5782
+   - \u5F00\u5FC3\u573A\u666F\uFF1A\u5FC5\u987B\u6709\u773C\u775B\u5F2F\u8D77/\u5634\u89D2\u4E0A\u626C/\u773C\u795E\u660E\u4EAE
+   - \u60CA\u6050\u573A\u666F\uFF1A\u5FC5\u987B\u6709\u77B3\u5B54\u653E\u5927/\u7709\u6BDB\u4E0A\u626C/\u5634\u5DF4\u5FAE\u5F20
+   - \u9738\u603B\u573A\u666F\uFF1A\u5FC5\u987B\u6709\u773C\u795E\u9510\u5229/\u4E0B\u988C\u7D27\u7EF7/\u8868\u60C5\u6C89\u7A33
+   - \u9762\u762B\u68C0\u67E5\uFF1A\u60C5\u7EEA\u5F3A\u70C8\u573A\u666F\u4F46\u8138\u90E8\u5B8C\u5168\u65E0\u8868\u60C5\u53D8\u5316\uFF0C\u76F4\u63A5fail
+7. **body_lang\uFF08\u80A2\u4F53\u4E0E\u624B\u90E8\u8868\u6F14\uFF09**\uFF1A\u62F3\u5934/\u624B\u6307/\u80A9\u8180/\u8EAB\u4F53\u59FF\u6001\u662F\u5426\u4F20\u8FBE\u60C5\u7EEA
+   - \u6124\u6012\uFF1A\u62F3\u5934\u6525\u7D27/\u8EAB\u4F53\u524D\u503E/\u80A9\u8180\u7EF7\u7D27
+   - \u59D4\u5C48\uFF1A\u6525\u8863\u89D2/\u7F29\u80A9/\u64E6\u6CEA/\u54AC\u5507
+   - \u7D27\u5F20\uFF1A\u624B\u6307\u7EDE\u52A8/\u6478\u9F3B\u5B50/\u8E6D\u88E4\u5B50/\u9891\u7E41\u541E\u54BD
+   - \u624B\u90E8\u5D29\u574F\u68C0\u67E5\uFF1A\u624B\u6307\u6570\u91CF/\u5F62\u6001\u6B63\u5E38\uFF0C\u65E0\u7A7F\u6A21\u626D\u66F2
+8. **voice_visual_sync\uFF08\u58F0\u753B\u540C\u6B65\uFF09**\uFF1A\u53E3\u578B\u662F\u5426\u4E0E\u53F0\u8BCD\u5339\u914D\uFF0C\u8BF4\u8BDD\u65F6\u8868\u60C5\u662F\u5426\u7B26\u5408\u53F0\u8BCD\u60C5\u7EEA
 
-### 合规维度（1项，发布前必查！）
-9. **compliance（内容合规）**：检测AI生成视频中的内容风险，避免发布到短视频平台被审核拒绝
-   - 政治敏感：国旗/国徽/领导人形象/政治标语的不当使用
-   - 暴力色情：过度暴力/血腥/色情暗示/裸露内容
-   - 广告法违规：绝对化用语（最/第一/国家级）、虚假宣传暗示
-   - 版权风险：可见品牌logo/水印/受版权保护的角色形象
-   - 价值观风险：歧视/侮辱/不良引导/低俗内容
-   - 平台规则：短视频平台（抖音/快手/B站）常见拒审原因
+### \u5408\u89C4\u7EF4\u5EA6\uFF081\u9879\uFF0C\u53D1\u5E03\u524D\u5FC5\u67E5\uFF01\uFF09
+9. **compliance\uFF08\u5185\u5BB9\u5408\u89C4\uFF09**\uFF1A\u68C0\u6D4BAI\u751F\u6210\u89C6\u9891\u4E2D\u7684\u5185\u5BB9\u98CE\u9669\uFF0C\u907F\u514D\u53D1\u5E03\u5230\u77ED\u89C6\u9891\u5E73\u53F0\u88AB\u5BA1\u6838\u62D2\u7EDD
+   - \u653F\u6CBB\u654F\u611F\uFF1A\u56FD\u65D7/\u56FD\u5FBD/\u9886\u5BFC\u4EBA\u5F62\u8C61/\u653F\u6CBB\u6807\u8BED\u7684\u4E0D\u5F53\u4F7F\u7528
+   - \u66B4\u529B\u8272\u60C5\uFF1A\u8FC7\u5EA6\u66B4\u529B/\u8840\u8165/\u8272\u60C5\u6697\u793A/\u88F8\u9732\u5185\u5BB9
+   - \u5E7F\u544A\u6CD5\u8FDD\u89C4\uFF1A\u7EDD\u5BF9\u5316\u7528\u8BED\uFF08\u6700/\u7B2C\u4E00/\u56FD\u5BB6\u7EA7\uFF09\u3001\u865A\u5047\u5BA3\u4F20\u6697\u793A
+   - \u7248\u6743\u98CE\u9669\uFF1A\u53EF\u89C1\u54C1\u724Clogo/\u6C34\u5370/\u53D7\u7248\u6743\u4FDD\u62A4\u7684\u89D2\u8272\u5F62\u8C61
+   - \u4EF7\u503C\u89C2\u98CE\u9669\uFF1A\u6B67\u89C6/\u4FAE\u8FB1/\u4E0D\u826F\u5F15\u5BFC/\u4F4E\u4FD7\u5185\u5BB9
+   - \u5E73\u53F0\u89C4\u5219\uFF1A\u77ED\u89C6\u9891\u5E73\u53F0\uFF08\u6296\u97F3/\u5FEB\u624B/B\u7AD9\uFF09\u5E38\u89C1\u62D2\u5BA1\u539F\u56E0
 
-## 硬fail条件（任一满足直接fail，score<60）
-- 脸部明显崩坏（五官变形/多眼/歪嘴/融化/变脸）
-- 严重肢体扭曲（多指/反关节/穿模）
-- 人物与参考图完全不像（换脸/换人种/换性别）
-- 与剧本场景/角色完全不符
-- 水印/UI/故事板线稿大面积残留
-- 面部完全无表情（面瘫脸），尤其是情绪强烈场景
-- 大面积闪烁/黑帧/花屏
-- 视频时长不足提示词要求的70%
-- 明显政治敏感内容（国旗误用/领导人形象/政治标语）
-- 明显色情/裸露内容
-- 明显暴力血腥内容
-- 可见的他人注册商标/品牌logo（非素材本身）
+## \u786Cfail\u6761\u4EF6\uFF08\u4EFB\u4E00\u6EE1\u8DB3\u76F4\u63A5fail\uFF0Cscore<60\uFF09
+- \u8138\u90E8\u660E\u663E\u5D29\u574F\uFF08\u4E94\u5B98\u53D8\u5F62/\u591A\u773C/\u6B6A\u5634/\u878D\u5316/\u53D8\u8138\uFF09
+- \u4E25\u91CD\u80A2\u4F53\u626D\u66F2\uFF08\u591A\u6307/\u53CD\u5173\u8282/\u7A7F\u6A21\uFF09
+- \u4EBA\u7269\u4E0E\u53C2\u8003\u56FE\u5B8C\u5168\u4E0D\u50CF\uFF08\u6362\u8138/\u6362\u4EBA\u79CD/\u6362\u6027\u522B\uFF09
+- \u4E0E\u5267\u672C\u573A\u666F/\u89D2\u8272\u5B8C\u5168\u4E0D\u7B26
+- \u6C34\u5370/UI/\u6545\u4E8B\u677F\u7EBF\u7A3F\u5927\u9762\u79EF\u6B8B\u7559
+- \u9762\u90E8\u5B8C\u5168\u65E0\u8868\u60C5\uFF08\u9762\u762B\u8138\uFF09\uFF0C\u5C24\u5176\u662F\u60C5\u7EEA\u5F3A\u70C8\u573A\u666F
+- \u5927\u9762\u79EF\u95EA\u70C1/\u9ED1\u5E27/\u82B1\u5C4F
+- \u89C6\u9891\u65F6\u957F\u4E0D\u8DB3\u63D0\u793A\u8BCD\u8981\u6C42\u768470%
+- \u660E\u663E\u653F\u6CBB\u654F\u611F\u5185\u5BB9\uFF08\u56FD\u65D7\u8BEF\u7528/\u9886\u5BFC\u4EBA\u5F62\u8C61/\u653F\u6CBB\u6807\u8BED\uFF09
+- \u660E\u663E\u8272\u60C5/\u88F8\u9732\u5185\u5BB9
+- \u660E\u663E\u66B4\u529B\u8840\u8165\u5185\u5BB9
+- \u53EF\u89C1\u7684\u4ED6\u4EBA\u6CE8\u518C\u5546\u6807/\u54C1\u724Clogo\uFF08\u975E\u7D20\u6750\u672C\u8EAB\uFF09
 
-## 后期可救条件（borderline，60-79分，标注postFixSuggestion）
-- 最后1-2秒轻微崩坏 → "裁剪尾部最后N帧"
-- 手部边缘轻微模糊 → 可接受或"轻微模糊手部区域"
-- 肤色轻微不统一 → "调色统一肤色"
-- 运镜轻微抖动 → "后期加稳定器"
-- 微表情不够到位但其他都好 → 可接受
+## \u540E\u671F\u53EF\u6551\u6761\u4EF6\uFF08borderline\uFF0C60-79\u5206\uFF0C\u6807\u6CE8postFixSuggestion\uFF09
+- \u6700\u540E1-2\u79D2\u8F7B\u5FAE\u5D29\u574F \u2192 "\u88C1\u526A\u5C3E\u90E8\u6700\u540EN\u5E27"
+- \u624B\u90E8\u8FB9\u7F18\u8F7B\u5FAE\u6A21\u7CCA \u2192 \u53EF\u63A5\u53D7\u6216"\u8F7B\u5FAE\u6A21\u7CCA\u624B\u90E8\u533A\u57DF"
+- \u80A4\u8272\u8F7B\u5FAE\u4E0D\u7EDF\u4E00 \u2192 "\u8C03\u8272\u7EDF\u4E00\u80A4\u8272"
+- \u8FD0\u955C\u8F7B\u5FAE\u6296\u52A8 \u2192 "\u540E\u671F\u52A0\u7A33\u5B9A\u5668"
+- \u5FAE\u8868\u60C5\u4E0D\u591F\u5230\u4F4D\u4F46\u5176\u4ED6\u90FD\u597D \u2192 \u53EF\u63A5\u53D7
 
-## 评分标准
-- A级（90-100）：优秀，直接使用，可做封面/高光片段
-- B级（80-89）：良好，直接使用
-- C级（70-79）：可用，标注minor issues
-- D级（60-69）：及格，必须有postFixSuggestion或rerollPrompt
-- F级（<60）：不合格，必须reroll，给出精准rerollPrompt
+## \u8BC4\u5206\u6807\u51C6
+- A\u7EA7\uFF0890-100\uFF09\uFF1A\u4F18\u79C0\uFF0C\u76F4\u63A5\u4F7F\u7528\uFF0C\u53EF\u505A\u5C01\u9762/\u9AD8\u5149\u7247\u6BB5
+- B\u7EA7\uFF0880-89\uFF09\uFF1A\u826F\u597D\uFF0C\u76F4\u63A5\u4F7F\u7528
+- C\u7EA7\uFF0870-79\uFF09\uFF1A\u53EF\u7528\uFF0C\u6807\u6CE8minor issues
+- D\u7EA7\uFF0860-69\uFF09\uFF1A\u53CA\u683C\uFF0C\u5FC5\u987B\u6709postFixSuggestion\u6216rerollPrompt
+- F\u7EA7\uFF08<60\uFF09\uFF1A\u4E0D\u5408\u683C\uFF0C\u5FC5\u987Breroll\uFF0C\u7ED9\u51FA\u7CBE\u51C6rerollPrompt
 
-## 演技问题诊断词典（遇到演技问题时使用以下描述，禁止笼统说"情绪不到位"）
-${Object.entries(ACTING_DIAGNOSIS)
-        .map(([k, v]) => `- ${k}：${v.desc} → 修复：${v.fix}`)
-        .join("\n")}
+## \u6F14\u6280\u95EE\u9898\u8BCA\u65AD\u8BCD\u5178\uFF08\u9047\u5230\u6F14\u6280\u95EE\u9898\u65F6\u4F7F\u7528\u4EE5\u4E0B\u63CF\u8FF0\uFF0C\u7981\u6B62\u7B3C\u7EDF\u8BF4"\u60C5\u7EEA\u4E0D\u5230\u4F4D"\uFF09
+${Object.entries(u).map(([t,i])=>`- ${t}\uFF1A${i.desc} \u2192 \u4FEE\u590D\uFF1A${i.fix}`).join(`
+`)}
 
-## 合规问题诊断词典（遇到合规风险时使用以下描述，禁止笼统说"内容不合规"）
-${Object.entries(COMPLIANCE_DIAGNOSIS)
-        .map(([k, v]) => `- ${k}：${v.desc} → 修复：${v.fix}`)
-        .join("\n")}
+## \u5408\u89C4\u95EE\u9898\u8BCA\u65AD\u8BCD\u5178\uFF08\u9047\u5230\u5408\u89C4\u98CE\u9669\u65F6\u4F7F\u7528\u4EE5\u4E0B\u63CF\u8FF0\uFF0C\u7981\u6B62\u7B3C\u7EDF\u8BF4"\u5185\u5BB9\u4E0D\u5408\u89C4"\uFF09
+${Object.entries(x).map(([t,i])=>`- ${t}\uFF1A${i.desc} \u2192 \u4FEE\u590D\uFF1A${i.fix}`).join(`
+`)}
 
-## 待审核视频信息
-- 视频提示词（prompt）：${clip.prompt}
-- 时长：${clip.generateConfig?.duration ?? "?"}秒
-- 模型：${clip.generateConfig?.model ?? "?"}
-${scriptContext ? `- 剧本上下文：${scriptContext.slice(0, 2000)}` : ""}
-- ${refNote}
+## \u5F85\u5BA1\u6838\u89C6\u9891\u4FE1\u606F
+- \u89C6\u9891\u63D0\u793A\u8BCD\uFF08prompt\uFF09\uFF1A${r.prompt}
+- \u65F6\u957F\uFF1A${r.generateConfig?.duration??"?"}\u79D2
+- \u6A21\u578B\uFF1A${r.generateConfig?.model??"?"}
+${n?`- \u5267\u672C\u4E0A\u4E0B\u6587\uFF1A${n.slice(0,2e3)}`:""}
+- ${a}
 
-## rerollPrompt写作规范（核心！）
-1. rerollPrompt必须是"追加指令"格式：在原提示词基础上追加具体修复指令
-2. fixInstruction必须具体到肌肉动作，从演技诊断词典选取
-3. 技术问题+演技问题分行写
-4. 一次reroll最多修3个问题，优先修最影响观感的
-5. 好例子："在原提示词基础上追加：1.右手手指修正为5根自然握拳；2.加强愤怒表演：眉头紧锁眉心拧起，眼神锐利死死盯住对方，牙关咬紧下颌紧绷，拳头攥紧指节发白；3.说话时口型与台词同步。其他保持不变。"
-6. 坏例子（禁止）："视频质量不好，请重新生成，注意情绪和表情。"
+## rerollPrompt\u5199\u4F5C\u89C4\u8303\uFF08\u6838\u5FC3\uFF01\uFF09
+1. rerollPrompt\u5FC5\u987B\u662F"\u8FFD\u52A0\u6307\u4EE4"\u683C\u5F0F\uFF1A\u5728\u539F\u63D0\u793A\u8BCD\u57FA\u7840\u4E0A\u8FFD\u52A0\u5177\u4F53\u4FEE\u590D\u6307\u4EE4
+2. fixInstruction\u5FC5\u987B\u5177\u4F53\u5230\u808C\u8089\u52A8\u4F5C\uFF0C\u4ECE\u6F14\u6280\u8BCA\u65AD\u8BCD\u5178\u9009\u53D6
+3. \u6280\u672F\u95EE\u9898+\u6F14\u6280\u95EE\u9898\u5206\u884C\u5199
+4. \u4E00\u6B21reroll\u6700\u591A\u4FEE3\u4E2A\u95EE\u9898\uFF0C\u4F18\u5148\u4FEE\u6700\u5F71\u54CD\u89C2\u611F\u7684
+5. \u597D\u4F8B\u5B50\uFF1A"\u5728\u539F\u63D0\u793A\u8BCD\u57FA\u7840\u4E0A\u8FFD\u52A0\uFF1A1.\u53F3\u624B\u624B\u6307\u4FEE\u6B63\u4E3A5\u6839\u81EA\u7136\u63E1\u62F3\uFF1B2.\u52A0\u5F3A\u6124\u6012\u8868\u6F14\uFF1A\u7709\u5934\u7D27\u9501\u7709\u5FC3\u62E7\u8D77\uFF0C\u773C\u795E\u9510\u5229\u6B7B\u6B7B\u76EF\u4F4F\u5BF9\u65B9\uFF0C\u7259\u5173\u54AC\u7D27\u4E0B\u988C\u7D27\u7EF7\uFF0C\u62F3\u5934\u6525\u7D27\u6307\u8282\u53D1\u767D\uFF1B3.\u8BF4\u8BDD\u65F6\u53E3\u578B\u4E0E\u53F0\u8BCD\u540C\u6B65\u3002\u5176\u4ED6\u4FDD\u6301\u4E0D\u53D8\u3002"
+6. \u574F\u4F8B\u5B50\uFF08\u7981\u6B62\uFF09\uFF1A"\u89C6\u9891\u8D28\u91CF\u4E0D\u597D\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\uFF0C\u6CE8\u610F\u60C5\u7EEA\u548C\u8868\u60C5\u3002"
 
-请输出严格JSON格式：
+\u8BF7\u8F93\u51FA\u4E25\u683CJSON\u683C\u5F0F\uFF1A
 {
   "verdict": "pass|borderline|fail",
   "score": 0-100,
-  "issues": [{"severity": "critical|major|minor", "dimension": "维度名", "description": "具体问题描述", "fixInstruction": "具体修复指令（从演技诊断词典选取）"}],
-  "postFixSuggestion": "后期修复建议（仅borderline时填写，如'裁剪最后2秒'）",
-  "rerollPrompt": "reroll追加指令（fail/borderline需重生时填写）",
-  "summary": "一句话总结审核结论"
-}`;
-}
-export function createVideoReviewer(ctx) {
-    const runtime = createAgentRuntime(ctx);
-    return {
-        async review({ videoClip, scriptContext = "", referenceImages = [] }) {
-            const prompt = buildReviewPrompt({
-                clip: videoClip,
-                scriptContext,
-                referenceImages,
-            });
-            const response = await runtime.chat([
-                {
-                    role: "system",
-                    content: "你是顶级AI短剧质检总监兼表演指导，输出严格JSON，中文回复。",
-                },
-                { role: "user", content: prompt },
-            ], { temperature: 0.2, maxTokens: 2000 });
-            const raw = parseAndValidate(response.content ?? "", VideoReviewResultSchema);
-            if (raw === null) {
-                throw new Error(`video review output: failed to parse or validate JSON`);
-            }
-            // Derive grade from score
-            const grade = raw.score >= 90 ? "A" :
-                raw.score >= 80 ? "B" :
-                    raw.score >= 70 ? "C" :
-                        raw.score >= 60 ? "D" : "F";
-            return {
-                ...raw,
-                grade,
-            };
-        },
-    };
-}
-// ---------------------------------------------------------------------------
-// Constants exported for pipeline defaults
-// ---------------------------------------------------------------------------
-export const VIDEO_REVIEW_DIMENSIONS = [
-    "visual_quality",
-    "character_consistency",
-    "motion_naturalness",
-    "scene_compliance",
-    "face_expr",
-    "body_lang",
-    "voice_visual_sync",
-    "technical",
-    "compliance",
-];
-//# sourceMappingURL=video-reviewer.js.map
+  "issues": [{"severity": "critical|major|minor", "dimension": "\u7EF4\u5EA6\u540D", "description": "\u5177\u4F53\u95EE\u9898\u63CF\u8FF0", "fixInstruction": "\u5177\u4F53\u4FEE\u590D\u6307\u4EE4\uFF08\u4ECE\u6F14\u6280\u8BCA\u65AD\u8BCD\u5178\u9009\u53D6\uFF09"}],
+  "postFixSuggestion": "\u540E\u671F\u4FEE\u590D\u5EFA\u8BAE\uFF08\u4EC5borderline\u65F6\u586B\u5199\uFF0C\u5982'\u88C1\u526A\u6700\u540E2\u79D2'\uFF09",
+  "rerollPrompt": "reroll\u8FFD\u52A0\u6307\u4EE4\uFF08fail/borderline\u9700\u91CD\u751F\u65F6\u586B\u5199\uFF09",
+  "summary": "\u4E00\u53E5\u8BDD\u603B\u7ED3\u5BA1\u6838\u7ED3\u8BBA"
+}`}export function createVideoReviewer(c){const r=m(c);return{async review({videoClip:n,scriptContext:s="",referenceImages:a=[]}){const t=g({clip:n,scriptContext:s,referenceImages:a}),i=await r.chat([{role:"system",content:"\u4F60\u662F\u9876\u7EA7AI\u77ED\u5267\u8D28\u68C0\u603B\u76D1\u517C\u8868\u6F14\u6307\u5BFC\uFF0C\u8F93\u51FA\u4E25\u683CJSON\uFF0C\u4E2D\u6587\u56DE\u590D\u3002"},{role:"user",content:t}],{temperature:.2,maxTokens:2e3}),o=p(i.content??"",f);if(o===null)throw new Error("video review output: failed to parse or validate JSON");const l=o.score>=90?"A":o.score>=80?"B":o.score>=70?"C":o.score>=60?"D":"F";return{...o,grade:l}}}}export const VIDEO_REVIEW_DIMENSIONS=["visual_quality","character_consistency","motion_naturalness","scene_compliance","face_expr","body_lang","voice_visual_sync","technical","compliance"];

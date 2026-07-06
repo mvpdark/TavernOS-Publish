@@ -11,7 +11,8 @@ export default defineConfig({
   resolve: {
     alias: {
       // Allow deep imports from @tavernos/core/dist/* for pure-data modules
-      "@tavernos/core/dist": path.resolve(__dirname, "node_modules/@tavernos/core/dist"),
+      // In pnpm workspace, @tavernos/core is symlinked to the actual package
+      "@tavernos/core/dist": path.resolve(__dirname, "../core/dist"),
     },
   },
   server: {

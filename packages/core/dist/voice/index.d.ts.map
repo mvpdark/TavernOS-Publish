@@ -1,1 +1,0 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/voice/index.ts"],"names":[],"mappings":"AAGA,OAAO,EACL,iBAAiB,EACjB,KAAK,WAAW,EAChB,KAAK,iBAAiB,GACvB,MAAM,aAAa,CAAC;AACrB,OAAO,EACL,wBAAwB,EACxB,uBAAuB,EACvB,6BAA6B,EAC7B,eAAe,EACf,iBAAiB,EACjB,KAAK,kBAAkB,EACvB,KAAK,iBAAiB,EACtB,KAAK,uBAAuB,EAC5B,KAAK,SAAS,EACd,KAAK,WAAW,GACjB,MAAM,YAAY,CAAC"}

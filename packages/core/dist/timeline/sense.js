@@ -1,72 +1,4 @@
-// packages/core/src/timeline/sense.ts
-// TimelineSense — persistent temporal tracking for the narrative.
-//
-// Tracks when events happen relative to the narrative's internal clock
-// (chapters, in-story time) and provides temporal recall such as "the last
-// time this character appeared was chapter 7".
-//
-// Storage: SQLite via better-sqlite3 (WAL journal mode).
-//   • timeline_anchors       — temporal markers for story events
-//   • character_appearances  — per-character chapter appearance records
-//
-// All SQL columns use snake_case; all TypeScript fields use camelCase.
-// Row mapping is handled by private mapXxxRow() methods.
-import Database from "better-sqlite3";
-import { dirname } from "node:path";
-import { mkdirSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { TimelineAnchorSchema, } from "./types.js";
-// ---------------------------------------------------------------------------
-// Input schema — anchor without server-generated fields
-// ---------------------------------------------------------------------------
-const AnchorInputSchema = TimelineAnchorSchema.omit({
-    id: true,
-    createdAt: true,
-});
-// ---------------------------------------------------------------------------
-// Common bigram stopwords for pattern detection
-// ---------------------------------------------------------------------------
-const BIGRAM_STOPWORDS = new Set([
-    "\u7684\u4e8b", "\u7684\u4e00", "\u4e86\u4e00", "\u662f\u4e00", // 的事|的一|了一|是一
-    "\u5728\u4e00", "\u4ed6\u4e00", "\u5979\u4e00", "\u4e0d\u4e00", // 在一|他一|她一|不一
-    "\u8fd9\u4e00", "\u90a3\u4e00", "\u5c31\u662f", "\u4e0d\u662f", // 这一|那一|就是|不是
-    "\u6ca1\u6709", "\u53ef\u4ee5", "\u8fd9\u6837", "\u90a3\u6837", // 没有|可以|这样|那样
-    "\u600e\u4e48", "\u4ec0\u4e48", "\u56e0\u4e3a", "\u6240\u4ee5", // 怎么|什么|因为|所以
-    "\u5982\u679c", "\u867d\u7136", "\u4f46\u662f", "\u53ef\u662f", // 如果|虽然|但是|可是
-    "\u4e0d\u8fc7", "\u8fd8\u662f", "\u5df2\u7ecf", "\u7136\u540e", // 不过|还是|已经|然后
-    "\u63a5\u7740", "\u968f\u540e", "\u540e\u6765", "\u7ec8\u4e8e", // 接着|随后|后来|终于
-    "\u6700\u540e", "\u9996\u5148", "\u7a81\u7136", "\u5ffd\u7136", // 最后|首先|突然|忽然
-    "\u6b64\u523b", "\u6b64\u65f6", "\u73b0\u5728", "\u4ee5\u524d", // 此刻|此时|现在|以前
-    "\u4ee5\u540e", "\u4e4b\u524d", "\u4e4b\u540e", "\u4e4b\u4e2d", // 以后|之前|之后|之中
-    "\u4e4b\u95f4", "\u4e4b\u4e0a", "\u4e4b\u4e0b", "\u5230\u4e86", // 之间|之上|之下|到了
-    "\u8d70\u4e86", "\u6765\u4e86", "\u53bb\u4e86", "\u56de\u4e86", // 走了|来了|去了|回了
-    "\u770b\u4e86", "\u60f3\u4e86", "\u8bf4\u4e86", "\u505a\u4e86", // 看了|想了|说了|做了
-    "\u6210\u4e86", "\u53d8\u4e86", "\u65f6\u5019", "\u5730\u65b9", // 成了|变了|时候|地方
-    "\u4e1c\u897f", "\u4e8b\u60c5", "\u4e00\u4e2a", "\u4e00\u6837", // 东西|事情|一个|一样
-    "\u4e00\u4e0b", "\u4e00\u8d77", "\u4e00\u5b9a", "\u4e00\u70b9", // 一下|一起|一定|一点
-    "\u8fd9\u4e2a", "\u90a3\u4e2a", "\u5c31\u5728", "\u5c31\u8981", // 这个|那个|就在|就要
-    "\u5c31\u4f1a", "\u8fd8\u6709", "\u8fd8\u5728", "\u8fd8\u8981", // 就会|还有|还在|还要
-]);
-// ---------------------------------------------------------------------------
-// TimelineSense
-// ---------------------------------------------------------------------------
-export class TimelineSense {
-    db;
-    closed = false;
-    constructor(dbPath) {
-        // Ensure the parent directory exists.
-        const dir = dirname(dbPath);
-        mkdirSync(dir, { recursive: true });
-        this.db = new Database(dbPath);
-        this.db.pragma("journal_mode = WAL");
-        this.db.pragma("foreign_keys = ON");
-        this.initSchema();
-    }
-    // -------------------------------------------------------------------------
-    // Schema initialisation
-    // -------------------------------------------------------------------------
-    initSchema() {
-        this.db.exec(`
+import h from"better-sqlite3";import{dirname as l}from"node:path";import{mkdirSync as d}from"node:fs";import{randomUUID as _}from"node:crypto";import{TimelineAnchorSchema as f}from"./types.js";const E=f.omit({id:!0,createdAt:!0}),T=new Set(["\u7684\u4E8B","\u7684\u4E00","\u4E86\u4E00","\u662F\u4E00","\u5728\u4E00","\u4ED6\u4E00","\u5979\u4E00","\u4E0D\u4E00","\u8FD9\u4E00","\u90A3\u4E00","\u5C31\u662F","\u4E0D\u662F","\u6CA1\u6709","\u53EF\u4EE5","\u8FD9\u6837","\u90A3\u6837","\u600E\u4E48","\u4EC0\u4E48","\u56E0\u4E3A","\u6240\u4EE5","\u5982\u679C","\u867D\u7136","\u4F46\u662F","\u53EF\u662F","\u4E0D\u8FC7","\u8FD8\u662F","\u5DF2\u7ECF","\u7136\u540E","\u63A5\u7740","\u968F\u540E","\u540E\u6765","\u7EC8\u4E8E","\u6700\u540E","\u9996\u5148","\u7A81\u7136","\u5FFD\u7136","\u6B64\u523B","\u6B64\u65F6","\u73B0\u5728","\u4EE5\u524D","\u4EE5\u540E","\u4E4B\u524D","\u4E4B\u540E","\u4E4B\u4E2D","\u4E4B\u95F4","\u4E4B\u4E0A","\u4E4B\u4E0B","\u5230\u4E86","\u8D70\u4E86","\u6765\u4E86","\u53BB\u4E86","\u56DE\u4E86","\u770B\u4E86","\u60F3\u4E86","\u8BF4\u4E86","\u505A\u4E86","\u6210\u4E86","\u53D8\u4E86","\u65F6\u5019","\u5730\u65B9","\u4E1C\u897F","\u4E8B\u60C5","\u4E00\u4E2A","\u4E00\u6837","\u4E00\u4E0B","\u4E00\u8D77","\u4E00\u5B9A","\u4E00\u70B9","\u8FD9\u4E2A","\u90A3\u4E2A","\u5C31\u5728","\u5C31\u8981","\u5C31\u4F1A","\u8FD8\u6709","\u8FD8\u5728","\u8FD8\u8981"]);export class TimelineSense{db;closed=!1;constructor(e){const t=l(e);d(t,{recursive:!0}),this.db=new h(e),this.db.pragma("journal_mode = WAL"),this.db.pragma("foreign_keys = ON"),this.initSchema()}initSchema(){this.db.exec(`
       CREATE TABLE IF NOT EXISTS timeline_anchors (
         id             TEXT PRIMARY KEY,
         chapter_index  INTEGER NOT NULL,
@@ -93,123 +25,22 @@ export class TimelineSense {
       );
 
       CREATE INDEX IF NOT EXISTS idx_appearances_last_chapter ON character_appearances(last_chapter);
-    `);
-    }
-    // -------------------------------------------------------------------------
-    // Row mapping (snake_case SQL ↔ camelCase TypeScript)
-    // -------------------------------------------------------------------------
-    mapAnchorRow(row) {
-        return {
-            id: row.id,
-            chapterIndex: row.chapter_index,
-            label: row.label,
-            inStoryTime: row.in_story_time ?? undefined,
-            characters: JSON.parse(row.characters),
-            location: row.location ?? undefined,
-            anchorType: row.anchor_type,
-            significance: row.significance,
-            createdAt: row.created_at,
-        };
-    }
-    mapAppearanceRow(row) {
-        return {
-            character: row.character,
-            firstChapter: row.first_chapter,
-            lastChapter: row.last_chapter,
-            totalChapters: row.total_chapters,
-            gapChapters: row.gap_chapters,
-            chapterList: JSON.parse(row.chapter_list),
-        };
-    }
-    // -------------------------------------------------------------------------
-    // Public API — Anchor operations
-    // -------------------------------------------------------------------------
-    /**
-     * Add a timeline anchor.
-     *
-     * @param input Anchor data without `id` and `createdAt` (server-generated).
-     * @returns     The fully-formed TimelineAnchor with id and createdAt.
-     */
-    addAnchor(input) {
-        // Validate input with Zod (fills defaults for optional fields).
-        const validated = AnchorInputSchema.parse(input);
-        const id = randomUUID();
-        const createdAt = new Date().toISOString();
-        this.db
-            .prepare(`
+    `)}mapAnchorRow(e){return{id:e.id,chapterIndex:e.chapter_index,label:e.label,inStoryTime:e.in_story_time??void 0,characters:JSON.parse(e.characters),location:e.location??void 0,anchorType:e.anchor_type,significance:e.significance,createdAt:e.created_at}}mapAppearanceRow(e){return{character:e.character,firstChapter:e.first_chapter,lastChapter:e.last_chapter,totalChapters:e.total_chapters,gapChapters:e.gap_chapters,chapterList:JSON.parse(e.chapter_list)}}addAnchor(e){const t=E.parse(e),c=_(),n=new Date().toISOString();return this.db.prepare(`
         INSERT INTO timeline_anchors
           (id, chapter_index, label, in_story_time, characters, location,
            anchor_type, significance, created_at)
         VALUES
           (@id, @chapter_index, @label, @in_story_time, @characters, @location,
            @anchor_type, @significance, @created_at)
-      `)
-            .run({
-            id,
-            chapter_index: validated.chapterIndex,
-            label: validated.label,
-            in_story_time: validated.inStoryTime ?? null,
-            characters: JSON.stringify(validated.characters),
-            location: validated.location ?? null,
-            anchor_type: validated.anchorType,
-            significance: validated.significance,
-            created_at: createdAt,
-        });
-        return {
-            ...validated,
-            id,
-            createdAt,
-        };
-    }
-    /**
-     * Get the most recent N anchors, ordered by chapter (descending) then
-     * creation time (descending).
-     */
-    getRecentAnchors(count) {
-        const rows = this.db
-            .prepare(`
+      `).run({id:c,chapter_index:t.chapterIndex,label:t.label,in_story_time:t.inStoryTime??null,characters:JSON.stringify(t.characters),location:t.location??null,anchor_type:t.anchorType,significance:t.significance,created_at:n}),{...t,id:c,createdAt:n}}getRecentAnchors(e){return this.db.prepare(`
         SELECT * FROM timeline_anchors
         ORDER BY chapter_index DESC, created_at DESC
         LIMIT ?
-      `)
-            .all(count);
-        return rows.map((r) => this.mapAnchorRow(r));
-    }
-    /**
-     * Get all anchors whose chapter_index falls within [from, to] (inclusive).
-     */
-    getAnchorsByChapter(from, to) {
-        const rows = this.db
-            .prepare(`
+      `).all(e).map(c=>this.mapAnchorRow(c))}getAnchorsByChapter(e,t){return this.db.prepare(`
         SELECT * FROM timeline_anchors
         WHERE chapter_index BETWEEN ? AND ?
         ORDER BY chapter_index ASC, created_at ASC
-      `)
-            .all(from, to);
-        return rows.map((r) => this.mapAnchorRow(r));
-    }
-    // -------------------------------------------------------------------------
-    // Public API — Character appearance operations
-    // -------------------------------------------------------------------------
-    /**
-     * Record that a character appeared in a given chapter.
-     * If the character is seen in the same chapter twice, the duplicate is
-     * silently ignored.
-     */
-    recordAppearance(character, chapterIndex) {
-        const existing = this.db
-            .prepare("SELECT * FROM character_appearances WHERE character = ?")
-            .get(character);
-        const now = new Date().toISOString();
-        if (existing) {
-            const chapterList = JSON.parse(existing.chapter_list);
-            // Ignore duplicate appearances in the same chapter.
-            if (chapterList.includes(chapterIndex))
-                return;
-            const gap = chapterIndex - existing.last_chapter;
-            chapterList.push(chapterIndex);
-            this.db
-                .prepare(`
+      `).all(e,t).map(n=>this.mapAnchorRow(n))}recordAppearance(e,t){const c=this.db.prepare("SELECT * FROM character_appearances WHERE character = ?").get(e),n=new Date().toISOString();if(c){const s=JSON.parse(c.chapter_list);if(s.includes(t))return;const i=t-c.last_chapter;s.push(t),this.db.prepare(`
           UPDATE character_appearances
           SET last_chapter   = @last_chapter,
               total_chapters = @total_chapters,
@@ -217,193 +48,11 @@ export class TimelineSense {
               chapter_list   = @chapter_list,
               updated_at     = @updated_at
           WHERE character    = @character
-        `)
-                .run({
-                character,
-                last_chapter: chapterIndex,
-                total_chapters: existing.total_chapters + 1,
-                gap_chapters: gap,
-                chapter_list: JSON.stringify(chapterList),
-                updated_at: now,
-            });
-        }
-        else {
-            this.db
-                .prepare(`
+        `).run({character:e,last_chapter:t,total_chapters:c.total_chapters+1,gap_chapters:i,chapter_list:JSON.stringify(s),updated_at:n})}else this.db.prepare(`
           INSERT INTO character_appearances
             (character, first_chapter, last_chapter, total_chapters,
              gap_chapters, chapter_list, updated_at)
           VALUES
             (@character, @first_chapter, @last_chapter, @total_chapters,
              @gap_chapters, @chapter_list, @updated_at)
-        `)
-                .run({
-                character,
-                first_chapter: chapterIndex,
-                last_chapter: chapterIndex,
-                total_chapters: 1,
-                gap_chapters: 0,
-                chapter_list: JSON.stringify([chapterIndex]),
-                updated_at: now,
-            });
-        }
-    }
-    /**
-     * Get the appearance record for a specific character.
-     */
-    getAppearance(character) {
-        const row = this.db
-            .prepare("SELECT * FROM character_appearances WHERE character = ?")
-            .get(character);
-        return row ? this.mapAppearanceRow(row) : undefined;
-    }
-    // -------------------------------------------------------------------------
-    // Public API — Temporal context & analysis
-    // -------------------------------------------------------------------------
-    /**
-     * Build a full temporal context for the given chapter.
-     *
-     * Includes the 5 most recent anchors, recurring patterns, time-since-last-
-     * appearance for every tracked character, and the current chapter's event
-     * density.
-     */
-    getTemporalContext(currentChapter) {
-        const recentAnchors = this.getRecentAnchors(5);
-        const recurringPatterns = this.detectRecurringPatterns();
-        const chapterDensity = this.getChapterDensity(currentChapter);
-        // Build time-since-last-appearance map for all tracked characters.
-        const timeSinceLastAppearance = new Map();
-        const allAppearances = this.getAllAppearances();
-        for (const record of allAppearances) {
-            timeSinceLastAppearance.set(record.character, Math.max(0, currentChapter - record.lastChapter));
-        }
-        return {
-            currentChapter,
-            recentAnchors,
-            recurringPatterns,
-            timeSinceLastAppearance,
-            chapterDensity,
-        };
-    }
-    /**
-     * Compute the event density (0-1) for a given chapter.
-     *
-     * Combines a count-based contribution (up to 0.6) with a significance-
-     * weighted contribution (up to 0.4). A chapter with 4+ high-significance
-     * events will approach 1.0.
-     */
-    getChapterDensity(chapterIndex) {
-        const rows = this.db
-            .prepare("SELECT significance FROM timeline_anchors WHERE chapter_index = ?")
-            .all(chapterIndex);
-        if (rows.length === 0)
-            return 0;
-        // Count contribution: each event adds 0.15, capped at 0.6 (4+ events).
-        const countPart = Math.min(0.6, rows.length * 0.15);
-        // Significance contribution: sum of significance × 0.1, capped at 0.4.
-        const totalSignificance = rows.reduce((sum, r) => sum + r.significance, 0);
-        const sigPart = Math.min(0.4, totalSignificance * 0.1);
-        return Math.min(1, countPart + sigPart);
-    }
-    /**
-     * Detect repeating patterns across all timeline anchors.
-     *
-     * Returns human-readable pattern strings for:
-     *   1. Character co-occurrences (pairs appearing together in 2+ anchors)
-     *   2. Recurring locations (appearing in 2+ anchors)
-     *   3. Anchor-type clustering (types appearing in 3+ anchors)
-     *   4. Recurring label keywords (2-grams appearing in 2+ labels)
-     */
-    detectRecurringPatterns() {
-        const allAnchors = this.getAllAnchors();
-        const patterns = [];
-        // --- 1. Character co-occurrence ---
-        const pairFreq = new Map();
-        for (const anchor of allAnchors) {
-            const sorted = [...anchor.characters].sort();
-            for (let i = 0; i < sorted.length; i++) {
-                for (let j = i + 1; j < sorted.length; j++) {
-                    const pair = `${sorted[i]} + ${sorted[j]}`;
-                    pairFreq.set(pair, (pairFreq.get(pair) ?? 0) + 1);
-                }
-            }
-        }
-        for (const [pair, freq] of pairFreq) {
-            if (freq >= 2) {
-                patterns.push(`\u89d2\u8272\u5171\u73b0: ${pair} (${freq}\u6b21)`); // 角色共现: ... (N次)
-            }
-        }
-        // --- 2. Recurring locations ---
-        const locFreq = new Map();
-        for (const anchor of allAnchors) {
-            if (anchor.location) {
-                locFreq.set(anchor.location, (locFreq.get(anchor.location) ?? 0) + 1);
-            }
-        }
-        for (const [loc, freq] of locFreq) {
-            if (freq >= 2) {
-                patterns.push(`\u91cd\u590d\u5730\u70b9: ${loc} (${freq}\u6b21)`); // 重复地点: ... (N次)
-            }
-        }
-        // --- 3. Anchor-type clustering ---
-        const typeFreq = new Map();
-        for (const anchor of allAnchors) {
-            typeFreq.set(anchor.anchorType, (typeFreq.get(anchor.anchorType) ?? 0) + 1);
-        }
-        for (const [type, freq] of typeFreq) {
-            if (freq >= 3) {
-                patterns.push(`\u4e8b\u4ef6\u7c7b\u578b\u805a\u96c6: ${type} (${freq}\u6b21)`); // 事件类型聚集: ... (N次)
-            }
-        }
-        // --- 4. Recurring label keywords (2-gram analysis) ---
-        const termFreq = new Map();
-        for (const anchor of allAnchors) {
-            const label = anchor.label;
-            const seen = new Set();
-            // Extract all 2-character CJK substrings.
-            for (let i = 0; i <= label.length - 2; i++) {
-                const gram = label.slice(i, i + 2);
-                if (/^[\u4e00-\u9fff]{2}$/.test(gram) && !BIGRAM_STOPWORDS.has(gram)) {
-                    seen.add(gram);
-                }
-            }
-            for (const gram of seen) {
-                termFreq.set(gram, (termFreq.get(gram) ?? 0) + 1);
-            }
-        }
-        for (const [gram, freq] of termFreq) {
-            if (freq >= 2) {
-                patterns.push(`\u91cd\u590d\u4e3b\u9898: ${gram} (${freq}\u6b21)`); // 重复主题: ... (N次)
-            }
-        }
-        return patterns;
-    }
-    // -------------------------------------------------------------------------
-    // Public API — lifecycle
-    // -------------------------------------------------------------------------
-    /** Close the database connection. Safe to call multiple times. */
-    close() {
-        if (this.closed)
-            return;
-        this.closed = true;
-        this.db.close();
-    }
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-    /** Retrieve all anchors ordered by chapter then creation time. */
-    getAllAnchors() {
-        const rows = this.db
-            .prepare("SELECT * FROM timeline_anchors ORDER BY chapter_index ASC, created_at ASC")
-            .all();
-        return rows.map((r) => this.mapAnchorRow(r));
-    }
-    /** Retrieve all appearance records ordered by last chapter (descending). */
-    getAllAppearances() {
-        const rows = this.db
-            .prepare("SELECT * FROM character_appearances ORDER BY last_chapter DESC")
-            .all();
-        return rows.map((r) => this.mapAppearanceRow(r));
-    }
-}
-//# sourceMappingURL=sense.js.map
+        `).run({character:e,first_chapter:t,last_chapter:t,total_chapters:1,gap_chapters:0,chapter_list:JSON.stringify([t]),updated_at:n})}getAppearance(e){const t=this.db.prepare("SELECT * FROM character_appearances WHERE character = ?").get(e);return t?this.mapAppearanceRow(t):void 0}getTemporalContext(e){const t=this.getRecentAnchors(5),c=this.detectRecurringPatterns(),n=this.getChapterDensity(e),s=new Map,i=this.getAllAppearances();for(const a of i)s.set(a.character,Math.max(0,e-a.lastChapter));return{currentChapter:e,recentAnchors:t,recurringPatterns:c,timeSinceLastAppearance:s,chapterDensity:n}}getChapterDensity(e){const t=this.db.prepare("SELECT significance FROM timeline_anchors WHERE chapter_index = ?").all(e);if(t.length===0)return 0;const c=Math.min(.6,t.length*.15),n=t.reduce((i,a)=>i+a.significance,0),s=Math.min(.4,n*.1);return Math.min(1,c+s)}detectRecurringPatterns(){const e=this.getAllAnchors(),t=[],c=new Map;for(const a of e){const r=[...a.characters].sort();for(let o=0;o<r.length;o++)for(let u=o+1;u<r.length;u++){const p=`${r[o]} + ${r[u]}`;c.set(p,(c.get(p)??0)+1)}}for(const[a,r]of c)r>=2&&t.push(`\u89D2\u8272\u5171\u73B0: ${a} (${r}\u6B21)`);const n=new Map;for(const a of e)a.location&&n.set(a.location,(n.get(a.location)??0)+1);for(const[a,r]of n)r>=2&&t.push(`\u91CD\u590D\u5730\u70B9: ${a} (${r}\u6B21)`);const s=new Map;for(const a of e)s.set(a.anchorType,(s.get(a.anchorType)??0)+1);for(const[a,r]of s)r>=3&&t.push(`\u4E8B\u4EF6\u7C7B\u578B\u805A\u96C6: ${a} (${r}\u6B21)`);const i=new Map;for(const a of e){const r=a.label,o=new Set;for(let u=0;u<=r.length-2;u++){const p=r.slice(u,u+2);/^[\u4e00-\u9fff]{2}$/.test(p)&&!T.has(p)&&o.add(p)}for(const u of o)i.set(u,(i.get(u)??0)+1)}for(const[a,r]of i)r>=2&&t.push(`\u91CD\u590D\u4E3B\u9898: ${a} (${r}\u6B21)`);return t}close(){this.closed||(this.closed=!0,this.db.close())}getAllAnchors(){return this.db.prepare("SELECT * FROM timeline_anchors ORDER BY chapter_index ASC, created_at ASC").all().map(t=>this.mapAnchorRow(t))}getAllAppearances(){return this.db.prepare("SELECT * FROM character_appearances ORDER BY last_chapter DESC").all().map(t=>this.mapAppearanceRow(t))}}

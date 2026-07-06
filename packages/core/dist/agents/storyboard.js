@@ -1,199 +1,112 @@
-// Storyboard Agent — two-phase storyboard script generation and shot splitting.
-//
-// V2.0 upgrades:
-//   - Shot now includes actingAnchors (face/hand/body micro-expression cues)
-//   - Automatic voice matching per character from voice-library (56 profiles)
-//   - voiceInstruction field with tone/pace/performance direction
-//   - emotionLabel auto-detected from dialogue + narration
-//   - Split-shots prompt now includes an "AI Actor Performance Manual" that
-//     instructs the LLM to produce concrete muscular/physical acting cues
-//     instead of abstract emotion adjectives.
-//
-// Phase 1: script() — chapter text + asset catalog → storyboard script
-// Phase 2: splitShots() — storyboard script → shot list (each shot ≤15s)
-// Phase 2b: reviewShots() — secondary pass to validate visual feasibility
-import { createAgentRuntime } from "./base.js";
-import { parseAndValidate } from "./json-utils.js";
-import { z } from "zod";
-import { buildActingAnchors, detectEmotions, buildVoicePerformanceCue } from "../video/emotion-anchors.js";
-import { matchVoice } from "../video/voice-library.js";
-// ---------------------------------------------------------------------------
-// Zod schemas for robust JSON parsing
-// ---------------------------------------------------------------------------
-const StoryboardSceneEntrySchema = z.object({
-    id: z.string(),
-    text: z.string(),
-    title: z.string().optional(),
-    location: z.string().optional(),
-    timeOfDay: z.string().optional(),
-    characters: z.array(z.string()).optional(),
-    props: z.array(z.string()).optional(),
-    mood: z.string().optional(),
-});
-const StoryboardScriptSchema = z.object({
-    title: z.string(),
-    totalScenes: z.number(),
-    estimatedDuration: z.string(),
-    style: z.string(),
-    scenes: z.array(StoryboardSceneEntrySchema),
-});
-export const ShotSchema = z.object({
-    shotNumber: z.number(),
-    sceneId: z.string(),
-    shotType: z.string(),
-    cameraMovement: z.string(),
-    prompt: z.string(),
-    actingAnchors: z.string().default(""),
-    emotionLabel: z.string().default(""),
-    voiceId: z.string().optional(),
-    voiceInstruction: z.string().optional(),
-    duration: z.number().min(4).max(15),
-    dialogue: z.string().optional(),
-    speaker: z.string().optional(),
-    characters: z.array(z.string()),
-    scenes: z.array(z.string()),
-    props: z.array(z.string()).optional(),
-    lighting: z.string().optional(),
-    description: z.string(),
-});
-export const ShotListSchema = z.object({
-    totalShots: z.number(),
-    totalDuration: z.number(),
-    shots: z.array(ShotSchema),
-});
-export const ShotAspectRatioSchema = z.enum(["16:9", "9:16", "1:1"]);
-const ShotReviewResultSchema = z.object({
-    feasible: z.boolean(),
-    issues: z.array(z.object({
-        shotNumber: z.number(),
-        severity: z.enum(["low", "medium", "high"]),
-        issue: z.string(),
-        suggestion: z.string(),
-    })),
-    suggestions: z.array(z.string()),
-});
-// ---------------------------------------------------------------------------
-// Prompt builders
-// ---------------------------------------------------------------------------
-function buildScriptSystemPrompt() {
-    return `你是一位专业的影视分镜师，擅长将小说章节改编为可用于AI视频生成的分镜脚本。
+import{createAgentRuntime as S}from"./base.js";import{parseAndValidate as d}from"./json-utils.js";import{z as t}from"zod";import{buildActingAnchors as y,detectEmotions as b,buildVoicePerformanceCue as A}from"../video/emotion-anchors.js";import{matchVoice as I}from"../video/voice-library.js";const $=t.object({id:t.string(),text:t.string(),title:t.string().optional(),location:t.string().optional(),timeOfDay:t.string().optional(),characters:t.array(t.string()).optional(),props:t.array(t.string()).optional(),mood:t.string().optional()}),v=t.object({title:t.string(),totalScenes:t.number(),estimatedDuration:t.string(),style:t.string(),scenes:t.array($)});export const ShotSchema=t.object({shotNumber:t.number(),sceneId:t.string(),shotType:t.string(),cameraMovement:t.string(),prompt:t.string(),actingAnchors:t.string().default(""),emotionLabel:t.string().default(""),voiceId:t.string().optional(),voiceInstruction:t.string().optional(),duration:t.number().min(4).max(15),dialogue:t.string().optional(),speaker:t.string().optional(),characters:t.array(t.string()),scenes:t.array(t.string()),props:t.array(t.string()).optional(),lighting:t.string().optional(),description:t.string()}),ShotListSchema=t.object({totalShots:t.number(),totalDuration:t.number(),shots:t.array(ShotSchema)}),ShotAspectRatioSchema=t.enum(["16:9","9:16","1:1"]);const w=t.object({feasible:t.boolean(),issues:t.array(t.object({shotNumber:t.number(),severity:t.enum(["low","medium","high"]),issue:t.string(),suggestion:t.string()})),suggestions:t.array(t.string())});function x(){return`\u4F60\u662F\u4E00\u4F4D\u4E13\u4E1A\u7684\u5F71\u89C6\u5206\u955C\u5E08\uFF0C\u64C5\u957F\u5C06\u5C0F\u8BF4\u7AE0\u8282\u6539\u7F16\u4E3A\u53EF\u7528\u4E8EAI\u89C6\u9891\u751F\u6210\u7684\u5206\u955C\u811A\u672C\u3002
 
-任务：根据提供的小说章节文本和资产目录（角色/场景/道具），将章节拆分为多个场景（storyboard scenes）。
+\u4EFB\u52A1\uFF1A\u6839\u636E\u63D0\u4F9B\u7684\u5C0F\u8BF4\u7AE0\u8282\u6587\u672C\u548C\u8D44\u4EA7\u76EE\u5F55\uFF08\u89D2\u8272/\u573A\u666F/\u9053\u5177\uFF09\uFF0C\u5C06\u7AE0\u8282\u62C6\u5206\u4E3A\u591A\u4E2A\u573A\u666F\uFF08storyboard scenes\uFF09\u3002
 
-要求：
-1. 严格忠于原著文本，不添加原文没有的情节
-2. 每个场景应该是一个相对完整的叙事单元（地点/时间/人物相对集中）
-3. 每个场景标注：地点、时间、出场人物、涉及道具、情绪氛围
-4. 场景的text字段必须是该场景对应的原文文本（可适当精简但不能改写原意）
-5. 场景数量根据章节长度决定，一般每章3-8个场景
-6. 输出JSON格式，不要输出其他内容
+\u8981\u6C42\uFF1A
+1. \u4E25\u683C\u5FE0\u4E8E\u539F\u8457\u6587\u672C\uFF0C\u4E0D\u6DFB\u52A0\u539F\u6587\u6CA1\u6709\u7684\u60C5\u8282
+2. \u6BCF\u4E2A\u573A\u666F\u5E94\u8BE5\u662F\u4E00\u4E2A\u76F8\u5BF9\u5B8C\u6574\u7684\u53D9\u4E8B\u5355\u5143\uFF08\u5730\u70B9/\u65F6\u95F4/\u4EBA\u7269\u76F8\u5BF9\u96C6\u4E2D\uFF09
+3. \u6BCF\u4E2A\u573A\u666F\u6807\u6CE8\uFF1A\u5730\u70B9\u3001\u65F6\u95F4\u3001\u51FA\u573A\u4EBA\u7269\u3001\u6D89\u53CA\u9053\u5177\u3001\u60C5\u7EEA\u6C1B\u56F4
+4. \u573A\u666F\u7684text\u5B57\u6BB5\u5FC5\u987B\u662F\u8BE5\u573A\u666F\u5BF9\u5E94\u7684\u539F\u6587\u6587\u672C\uFF08\u53EF\u9002\u5F53\u7CBE\u7B80\u4F46\u4E0D\u80FD\u6539\u5199\u539F\u610F\uFF09
+5. \u573A\u666F\u6570\u91CF\u6839\u636E\u7AE0\u8282\u957F\u5EA6\u51B3\u5B9A\uFF0C\u4E00\u822C\u6BCF\u7AE03-8\u4E2A\u573A\u666F
+6. \u8F93\u51FAJSON\u683C\u5F0F\uFF0C\u4E0D\u8981\u8F93\u51FA\u5176\u4ED6\u5185\u5BB9
 
-可用资产（必须使用这些角色/场景/道具名称）：
-{assets_section}`;
-}
-function buildScriptUserPrompt(params) {
-    const assetsSection = formatAssetsSection(params.assets);
-    return `小说章节文本：
+\u53EF\u7528\u8D44\u4EA7\uFF08\u5FC5\u987B\u4F7F\u7528\u8FD9\u4E9B\u89D2\u8272/\u573A\u666F/\u9053\u5177\u540D\u79F0\uFF09\uFF1A
+{assets_section}`}function k(n){const r=f(n.assets);return`\u5C0F\u8BF4\u7AE0\u8282\u6587\u672C\uFF1A
 """
-${params.chapterText.slice(0, 6000)}
+${n.chapterText.slice(0,6e3)}
 """
 
-可用资产：
-${assetsSection}
+\u53EF\u7528\u8D44\u4EA7\uFF1A
+${r}
 
-请将上述章节拆分为分镜脚本，输出严格的JSON格式：
+\u8BF7\u5C06\u4E0A\u8FF0\u7AE0\u8282\u62C6\u5206\u4E3A\u5206\u955C\u811A\u672C\uFF0C\u8F93\u51FA\u4E25\u683C\u7684JSON\u683C\u5F0F\uFF1A
 {
-  "title": "章节标题",
-  "totalScenes": 场景数量,
-  "estimatedDuration": "预估总时长（如3-5分钟）",
-  "style": "整体视觉风格",
+  "title": "\u7AE0\u8282\u6807\u9898",
+  "totalScenes": \u573A\u666F\u6570\u91CF,
+  "estimatedDuration": "\u9884\u4F30\u603B\u65F6\u957F\uFF08\u59823-5\u5206\u949F\uFF09",
+  "style": "\u6574\u4F53\u89C6\u89C9\u98CE\u683C",
   "scenes": [
     {
       "id": "S1",
-      "text": "该场景对应的原文",
-      "title": "场景标题",
-      "location": "地点",
-      "timeOfDay": "日/夜/黄昏等",
-      "characters": ["出场角色名"],
-      "props": ["涉及道具"],
-      "mood": "情绪氛围关键词"
+      "text": "\u8BE5\u573A\u666F\u5BF9\u5E94\u7684\u539F\u6587",
+      "title": "\u573A\u666F\u6807\u9898",
+      "location": "\u5730\u70B9",
+      "timeOfDay": "\u65E5/\u591C/\u9EC4\u660F\u7B49",
+      "characters": ["\u51FA\u573A\u89D2\u8272\u540D"],
+      "props": ["\u6D89\u53CA\u9053\u5177"],
+      "mood": "\u60C5\u7EEA\u6C1B\u56F4\u5173\u952E\u8BCD"
     }
   ]
-}`;
-}
-function buildSplitShotsPrompt(params) {
-    const assetsSection = formatAssetsSection(params.assets);
-    const scenesText = params.script.scenes
-        .map((s) => `【${s.id}】${s.title ?? ""}（${s.location ?? ""}，${s.timeOfDay ?? ""}）
-人物：${(s.characters ?? []).join("、") || "无"}
-情绪：${s.mood ?? "自然"}
-原文：${s.text.slice(0, 500)}`)
-        .join("\n\n");
-    return `你是一位顶级AI短剧导演兼表演指导，深谙AI视频模型（Seedance/Grok）的演技特性。
+}`}function N(n){const r=f(n.assets),e=n.script.scenes.map(o=>`\u3010${o.id}\u3011${o.title??""}\uFF08${o.location??""}\uFF0C${o.timeOfDay??""}\uFF09
+\u4EBA\u7269\uFF1A${(o.characters??[]).join("\u3001")||"\u65E0"}
+\u60C5\u7EEA\uFF1A${o.mood??"\u81EA\u7136"}
+\u539F\u6587\uFF1A${o.text.slice(0,500)}`).join(`
 
-## 核心认知：AI演员的特点
-- AI视频模型看不懂抽象情绪词：写"她很委屈""他愤怒了"，AI只会给你一张平静的脸
-- AI视频模型看得懂具体动作指令：写"眼眶泛红，嘴唇微微颤抖，紧咬下唇"，AI就能演出委屈
-- 短剧观众3秒定生死：开头没有表情钩子直接划走
-- 声画必须同步：声音情绪和面部表情不能两张皮
-- 微表情>大动作：短剧最上头的是眼神变化、嘴角抽动、手指一颤这些细节
+`);return`\u4F60\u662F\u4E00\u4F4D\u9876\u7EA7AI\u77ED\u5267\u5BFC\u6F14\u517C\u8868\u6F14\u6307\u5BFC\uFF0C\u6DF1\u8C19AI\u89C6\u9891\u6A21\u578B\uFF08Seedance/Grok\uFF09\u7684\u6F14\u6280\u7279\u6027\u3002
 
-## AI演员表演手册（必须遵守）
-写情绪时，禁止只写情绪形容词（如"很生气""很委屈"），必须写至少2个具体表演锚点：
-- 面部锚点：眉头/眼神/嘴角/牙关/下颌的具体状态
-- 手部锚点：攥拳/攥衣角/捂嘴/擦泪/手指动作
-- 身体锚点：前倾/缩肩/后退/僵硬/姿态
-例：
-- 愤怒→眉头紧锁眉心拧起，拳头攥紧指节发白，身体微微前倾压迫对方
-- 委屈→眼眶泛红，嘴唇微微颤抖，紧咬下唇，攥紧衣角
-- 开心→眼睛弯成月牙，嘴角上扬带笑，动作轻快
-- 惊恐→眼睛瞪大瞳孔放大，手捂住嘴，身体瞬间僵住
-- 霸总→表情沉稳不怒自威，眼神深邃有掌控力，单手插兜
+## \u6838\u5FC3\u8BA4\u77E5\uFF1AAI\u6F14\u5458\u7684\u7279\u70B9
+- AI\u89C6\u9891\u6A21\u578B\u770B\u4E0D\u61C2\u62BD\u8C61\u60C5\u7EEA\u8BCD\uFF1A\u5199"\u5979\u5F88\u59D4\u5C48""\u4ED6\u6124\u6012\u4E86"\uFF0CAI\u53EA\u4F1A\u7ED9\u4F60\u4E00\u5F20\u5E73\u9759\u7684\u8138
+- AI\u89C6\u9891\u6A21\u578B\u770B\u5F97\u61C2\u5177\u4F53\u52A8\u4F5C\u6307\u4EE4\uFF1A\u5199"\u773C\u7736\u6CDB\u7EA2\uFF0C\u5634\u5507\u5FAE\u5FAE\u98A4\u6296\uFF0C\u7D27\u54AC\u4E0B\u5507"\uFF0CAI\u5C31\u80FD\u6F14\u51FA\u59D4\u5C48
+- \u77ED\u5267\u89C2\u4F173\u79D2\u5B9A\u751F\u6B7B\uFF1A\u5F00\u5934\u6CA1\u6709\u8868\u60C5\u94A9\u5B50\u76F4\u63A5\u5212\u8D70
+- \u58F0\u753B\u5FC5\u987B\u540C\u6B65\uFF1A\u58F0\u97F3\u60C5\u7EEA\u548C\u9762\u90E8\u8868\u60C5\u4E0D\u80FD\u4E24\u5F20\u76AE
+- \u5FAE\u8868\u60C5>\u5927\u52A8\u4F5C\uFF1A\u77ED\u5267\u6700\u4E0A\u5934\u7684\u662F\u773C\u795E\u53D8\u5316\u3001\u5634\u89D2\u62BD\u52A8\u3001\u624B\u6307\u4E00\u98A4\u8FD9\u4E9B\u7EC6\u8282
 
-## 音色匹配规则
-为有台词的角色匹配合适音色，voiceId从以下常用音色中选择：
-- 青年女主（15-22岁清亮女声）：F03A（少女清亮利落音）
-- 温柔女主（15-22岁软甜女声）：F03B（少女软糯甜感音）
-- 冷感女主（20-28岁清冷女声）：F04A（少御清冷音）
-- 御姐/女总裁（25-38岁）：F05A（御姐冷艳音）
-- 霸总/男主（28-40岁低沉磁性）：M04A（霸总低磁音）
-- 青年男主（20-30岁阳光）：M03B（青年阳光音）
-- 温柔男二（20-30岁温润）：M03A（青年温润音）
-- 中年父亲（40-60岁温厚）：M05D（慈父温厚音）
-- 中年母亲（38-55岁温厚）：F06B（中年母亲温厚音）
-- 系统/AI音：S02A（系统女声）
-- 旁白：S03A（短剧旁白男声）
+## AI\u6F14\u5458\u8868\u6F14\u624B\u518C\uFF08\u5FC5\u987B\u9075\u5B88\uFF09
+\u5199\u60C5\u7EEA\u65F6\uFF0C\u7981\u6B62\u53EA\u5199\u60C5\u7EEA\u5F62\u5BB9\u8BCD\uFF08\u5982"\u5F88\u751F\u6C14""\u5F88\u59D4\u5C48"\uFF09\uFF0C\u5FC5\u987B\u5199\u81F3\u5C112\u4E2A\u5177\u4F53\u8868\u6F14\u951A\u70B9\uFF1A
+- \u9762\u90E8\u951A\u70B9\uFF1A\u7709\u5934/\u773C\u795E/\u5634\u89D2/\u7259\u5173/\u4E0B\u988C\u7684\u5177\u4F53\u72B6\u6001
+- \u624B\u90E8\u951A\u70B9\uFF1A\u6525\u62F3/\u6525\u8863\u89D2/\u6342\u5634/\u64E6\u6CEA/\u624B\u6307\u52A8\u4F5C
+- \u8EAB\u4F53\u951A\u70B9\uFF1A\u524D\u503E/\u7F29\u80A9/\u540E\u9000/\u50F5\u786C/\u59FF\u6001
+\u4F8B\uFF1A
+- \u6124\u6012\u2192\u7709\u5934\u7D27\u9501\u7709\u5FC3\u62E7\u8D77\uFF0C\u62F3\u5934\u6525\u7D27\u6307\u8282\u53D1\u767D\uFF0C\u8EAB\u4F53\u5FAE\u5FAE\u524D\u503E\u538B\u8FEB\u5BF9\u65B9
+- \u59D4\u5C48\u2192\u773C\u7736\u6CDB\u7EA2\uFF0C\u5634\u5507\u5FAE\u5FAE\u98A4\u6296\uFF0C\u7D27\u54AC\u4E0B\u5507\uFF0C\u6525\u7D27\u8863\u89D2
+- \u5F00\u5FC3\u2192\u773C\u775B\u5F2F\u6210\u6708\u7259\uFF0C\u5634\u89D2\u4E0A\u626C\u5E26\u7B11\uFF0C\u52A8\u4F5C\u8F7B\u5FEB
+- \u60CA\u6050\u2192\u773C\u775B\u77AA\u5927\u77B3\u5B54\u653E\u5927\uFF0C\u624B\u6342\u4F4F\u5634\uFF0C\u8EAB\u4F53\u77AC\u95F4\u50F5\u4F4F
+- \u9738\u603B\u2192\u8868\u60C5\u6C89\u7A33\u4E0D\u6012\u81EA\u5A01\uFF0C\u773C\u795E\u6DF1\u9083\u6709\u638C\u63A7\u529B\uFF0C\u5355\u624B\u63D2\u515C
 
-voiceInstruction写发声方式：
-- 愤怒→语气压着怒气，咬字变重，一字一句
-- 委屈→声音很轻，尾音发虚，带抽泣感
-- 开心→语气轻快带笑音，语速偏快
-- 霸总→声音低沉有磁性，语速中慢，句尾下沉
-- 温柔→声音柔和，语速偏慢，温暖安抚
+## \u97F3\u8272\u5339\u914D\u89C4\u5219
+\u4E3A\u6709\u53F0\u8BCD\u7684\u89D2\u8272\u5339\u914D\u5408\u9002\u97F3\u8272\uFF0CvoiceId\u4ECE\u4EE5\u4E0B\u5E38\u7528\u97F3\u8272\u4E2D\u9009\u62E9\uFF1A
+- \u9752\u5E74\u5973\u4E3B\uFF0815-22\u5C81\u6E05\u4EAE\u5973\u58F0\uFF09\uFF1AF03A\uFF08\u5C11\u5973\u6E05\u4EAE\u5229\u843D\u97F3\uFF09
+- \u6E29\u67D4\u5973\u4E3B\uFF0815-22\u5C81\u8F6F\u751C\u5973\u58F0\uFF09\uFF1AF03B\uFF08\u5C11\u5973\u8F6F\u7CEF\u751C\u611F\u97F3\uFF09
+- \u51B7\u611F\u5973\u4E3B\uFF0820-28\u5C81\u6E05\u51B7\u5973\u58F0\uFF09\uFF1AF04A\uFF08\u5C11\u5FA1\u6E05\u51B7\u97F3\uFF09
+- \u5FA1\u59D0/\u5973\u603B\u88C1\uFF0825-38\u5C81\uFF09\uFF1AF05A\uFF08\u5FA1\u59D0\u51B7\u8273\u97F3\uFF09
+- \u9738\u603B/\u7537\u4E3B\uFF0828-40\u5C81\u4F4E\u6C89\u78C1\u6027\uFF09\uFF1AM04A\uFF08\u9738\u603B\u4F4E\u78C1\u97F3\uFF09
+- \u9752\u5E74\u7537\u4E3B\uFF0820-30\u5C81\u9633\u5149\uFF09\uFF1AM03B\uFF08\u9752\u5E74\u9633\u5149\u97F3\uFF09
+- \u6E29\u67D4\u7537\u4E8C\uFF0820-30\u5C81\u6E29\u6DA6\uFF09\uFF1AM03A\uFF08\u9752\u5E74\u6E29\u6DA6\u97F3\uFF09
+- \u4E2D\u5E74\u7236\u4EB2\uFF0840-60\u5C81\u6E29\u539A\uFF09\uFF1AM05D\uFF08\u6148\u7236\u6E29\u539A\u97F3\uFF09
+- \u4E2D\u5E74\u6BCD\u4EB2\uFF0838-55\u5C81\u6E29\u539A\uFF09\uFF1AF06B\uFF08\u4E2D\u5E74\u6BCD\u4EB2\u6E29\u539A\u97F3\uFF09
+- \u7CFB\u7EDF/AI\u97F3\uFF1AS02A\uFF08\u7CFB\u7EDF\u5973\u58F0\uFF09
+- \u65C1\u767D\uFF1AS03A\uFF08\u77ED\u5267\u65C1\u767D\u7537\u58F0\uFF09
 
-任务：将以下分镜脚本拆分为具体的镜头列表（shot list）。每个镜头时长4-${params.maxDuration}秒，适合AI视频生成。
+voiceInstruction\u5199\u53D1\u58F0\u65B9\u5F0F\uFF1A
+- \u6124\u6012\u2192\u8BED\u6C14\u538B\u7740\u6012\u6C14\uFF0C\u54AC\u5B57\u53D8\u91CD\uFF0C\u4E00\u5B57\u4E00\u53E5
+- \u59D4\u5C48\u2192\u58F0\u97F3\u5F88\u8F7B\uFF0C\u5C3E\u97F3\u53D1\u865A\uFF0C\u5E26\u62BD\u6CE3\u611F
+- \u5F00\u5FC3\u2192\u8BED\u6C14\u8F7B\u5FEB\u5E26\u7B11\u97F3\uFF0C\u8BED\u901F\u504F\u5FEB
+- \u9738\u603B\u2192\u58F0\u97F3\u4F4E\u6C89\u6709\u78C1\u6027\uFF0C\u8BED\u901F\u4E2D\u6162\uFF0C\u53E5\u5C3E\u4E0B\u6C89
+- \u6E29\u67D4\u2192\u58F0\u97F3\u67D4\u548C\uFF0C\u8BED\u901F\u504F\u6162\uFF0C\u6E29\u6696\u5B89\u629A
 
-可用资产：
-${assetsSection}
+\u4EFB\u52A1\uFF1A\u5C06\u4EE5\u4E0B\u5206\u955C\u811A\u672C\u62C6\u5206\u4E3A\u5177\u4F53\u7684\u955C\u5934\u5217\u8868\uFF08shot list\uFF09\u3002\u6BCF\u4E2A\u955C\u5934\u65F6\u957F4-${n.maxDuration}\u79D2\uFF0C\u9002\u5408AI\u89C6\u9891\u751F\u6210\u3002
 
-分镜脚本：
-${scenesText}
+\u53EF\u7528\u8D44\u4EA7\uFF1A
+${r}
 
-要求：
-1. 每个镜头必须有：镜头编号、景别、运镜、英文画面提示词prompt、中文描述description、时长、出场人物
-2. prompt字段用英文，包含：主体、动作、光线、构图、电影感风格。必须包含具体的表演动作（如"eyebrows furrowed, fists clenched"），不能只写情绪词
-3. actingAnchors字段用中文，写面部+手部+身体的具体表演锚点（如"眉头紧锁，拳头攥紧，身体前倾"），不要写抽象情绪词
-4. emotionLabel字段写该镜头的主要情绪关键词（如"愤怒""委屈""开心"）
-5. 有台词的镜头必须填写：speaker（说话人）、dialogue（台词内容）、voiceId（音色ID）、voiceInstruction（发声方式指导）
-6. 无台词镜头voiceId/voiceInstruction留空，但actingAnchors仍需填写（情绪通过表情肢体传达）
-7. 镜头顺序必须与场景顺序一致，保持叙事连贯性
-8. 相邻镜头之间要有景别变化（不能全是特写或全是全景）
-9. 输出严格JSON格式，不要输出其他内容
+\u5206\u955C\u811A\u672C\uFF1A
+${e}
 
-输出JSON格式：
+\u8981\u6C42\uFF1A
+1. \u6BCF\u4E2A\u955C\u5934\u5FC5\u987B\u6709\uFF1A\u955C\u5934\u7F16\u53F7\u3001\u666F\u522B\u3001\u8FD0\u955C\u3001\u82F1\u6587\u753B\u9762\u63D0\u793A\u8BCDprompt\u3001\u4E2D\u6587\u63CF\u8FF0description\u3001\u65F6\u957F\u3001\u51FA\u573A\u4EBA\u7269
+2. prompt\u5B57\u6BB5\u7528\u82F1\u6587\uFF0C\u5305\u542B\uFF1A\u4E3B\u4F53\u3001\u52A8\u4F5C\u3001\u5149\u7EBF\u3001\u6784\u56FE\u3001\u7535\u5F71\u611F\u98CE\u683C\u3002\u5FC5\u987B\u5305\u542B\u5177\u4F53\u7684\u8868\u6F14\u52A8\u4F5C\uFF08\u5982"eyebrows furrowed, fists clenched"\uFF09\uFF0C\u4E0D\u80FD\u53EA\u5199\u60C5\u7EEA\u8BCD
+3. actingAnchors\u5B57\u6BB5\u7528\u4E2D\u6587\uFF0C\u5199\u9762\u90E8+\u624B\u90E8+\u8EAB\u4F53\u7684\u5177\u4F53\u8868\u6F14\u951A\u70B9\uFF08\u5982"\u7709\u5934\u7D27\u9501\uFF0C\u62F3\u5934\u6525\u7D27\uFF0C\u8EAB\u4F53\u524D\u503E"\uFF09\uFF0C\u4E0D\u8981\u5199\u62BD\u8C61\u60C5\u7EEA\u8BCD
+4. emotionLabel\u5B57\u6BB5\u5199\u8BE5\u955C\u5934\u7684\u4E3B\u8981\u60C5\u7EEA\u5173\u952E\u8BCD\uFF08\u5982"\u6124\u6012""\u59D4\u5C48""\u5F00\u5FC3"\uFF09
+5. \u6709\u53F0\u8BCD\u7684\u955C\u5934\u5FC5\u987B\u586B\u5199\uFF1Aspeaker\uFF08\u8BF4\u8BDD\u4EBA\uFF09\u3001dialogue\uFF08\u53F0\u8BCD\u5185\u5BB9\uFF09\u3001voiceId\uFF08\u97F3\u8272ID\uFF09\u3001voiceInstruction\uFF08\u53D1\u58F0\u65B9\u5F0F\u6307\u5BFC\uFF09
+6. \u65E0\u53F0\u8BCD\u955C\u5934voiceId/voiceInstruction\u7559\u7A7A\uFF0C\u4F46actingAnchors\u4ECD\u9700\u586B\u5199\uFF08\u60C5\u7EEA\u901A\u8FC7\u8868\u60C5\u80A2\u4F53\u4F20\u8FBE\uFF09
+7. \u955C\u5934\u987A\u5E8F\u5FC5\u987B\u4E0E\u573A\u666F\u987A\u5E8F\u4E00\u81F4\uFF0C\u4FDD\u6301\u53D9\u4E8B\u8FDE\u8D2F\u6027
+8. \u76F8\u90BB\u955C\u5934\u4E4B\u95F4\u8981\u6709\u666F\u522B\u53D8\u5316\uFF08\u4E0D\u80FD\u5168\u662F\u7279\u5199\u6216\u5168\u662F\u5168\u666F\uFF09
+9. \u8F93\u51FA\u4E25\u683CJSON\u683C\u5F0F\uFF0C\u4E0D\u8981\u8F93\u51FA\u5176\u4ED6\u5185\u5BB9
+
+\u8F93\u51FAJSON\u683C\u5F0F\uFF1A
 {
-  "totalShots": 总镜头数,
-  "totalDuration": 总时长秒数,
+  "totalShots": \u603B\u955C\u5934\u6570,
+  "totalDuration": \u603B\u65F6\u957F\u79D2\u6570,
   "shots": [
     {
       "shotNumber": 1,
@@ -201,158 +114,45 @@ ${scenesText}
       "shotType": "close-up|medium shot|wide shot|over-the-shoulder|extreme close-up",
       "cameraMovement": "static|slow push-in|slow pull-back|pan left|tracking shot|slow tilt up|dolly zoom",
       "prompt": "English visual prompt with concrete actions and expressions, cinematic, shallow depth of field",
-      "actingAnchors": "眉头紧锁，拳头攥紧指节发白，身体微微前倾（中文具体表演锚点）",
-      "emotionLabel": "愤怒",
+      "actingAnchors": "\u7709\u5934\u7D27\u9501\uFF0C\u62F3\u5934\u6525\u7D27\u6307\u8282\u53D1\u767D\uFF0C\u8EAB\u4F53\u5FAE\u5FAE\u524D\u503E\uFF08\u4E2D\u6587\u5177\u4F53\u8868\u6F14\u951A\u70B9\uFF09",
+      "emotionLabel": "\u6124\u6012",
       "voiceId": "M04A",
-      "voiceInstruction": "语气压着怒气，咬字变重，一字一句",
+      "voiceInstruction": "\u8BED\u6C14\u538B\u7740\u6012\u6C14\uFF0C\u54AC\u5B57\u53D8\u91CD\uFF0C\u4E00\u5B57\u4E00\u53E5",
       "duration": 5,
-      "dialogue": "台词内容（无台词则省略）",
-      "speaker": "角色名（无台词则省略）",
-      "characters": ["角色名"],
-      "scenes": ["场景名"],
-      "props": ["道具名"],
-      "lighting": "光线描述",
-      "description": "中文镜头描述"
+      "dialogue": "\u53F0\u8BCD\u5185\u5BB9\uFF08\u65E0\u53F0\u8BCD\u5219\u7701\u7565\uFF09",
+      "speaker": "\u89D2\u8272\u540D\uFF08\u65E0\u53F0\u8BCD\u5219\u7701\u7565\uFF09",
+      "characters": ["\u89D2\u8272\u540D"],
+      "scenes": ["\u573A\u666F\u540D"],
+      "props": ["\u9053\u5177\u540D"],
+      "lighting": "\u5149\u7EBF\u63CF\u8FF0",
+      "description": "\u4E2D\u6587\u955C\u5934\u63CF\u8FF0"
     }
   ]
-}`;
-}
-function formatAssetsSection(assets) {
-    const lines = [];
-    if (assets.characters.length > 0) {
-        lines.push("角色：");
-        for (const c of assets.characters) {
-            const aliases = c.aliases?.length ? `（别名：${c.aliases.join("、")}）` : "";
-            const gender = c.gender ? `，性别：${c.gender}` : "";
-            const arch = c.archetype ? `，类型：${c.archetype}` : "";
-            lines.push(`- ${c.name}${aliases}：${c.description}${gender}${arch}`);
-        }
-    }
-    if (assets.scenes.length > 0) {
-        lines.push("\n场景：");
-        for (const s of assets.scenes) {
-            const aliases = s.aliases?.length ? `（别名：${s.aliases.join("、")}）` : "";
-            lines.push(`- ${s.name}${aliases}：${s.description}`);
-        }
-    }
-    if (assets.props.length > 0) {
-        lines.push("\n道具：");
-        for (const p of assets.props) {
-            const aliases = p.aliases?.length ? `（别名：${p.aliases.join("、")}）` : "";
-            lines.push(`- ${p.name}${aliases}：${p.description}`);
-        }
-    }
-    return lines.join("\n");
-}
-export function createStoryboardAgent(ctx) {
-    const runtime = createAgentRuntime(ctx);
-    async function callLLM(messages, schema) {
-        const response = await runtime.chat(messages, {
-            temperature: 0.5,
-            maxTokens: 8000,
-        });
-        const text = response.content ?? "";
-        const parsed = parseAndValidate(text, schema);
-        if (parsed === null) {
-            throw new Error(`storyboard agent output: failed to parse or validate JSON`);
-        }
-        return parsed;
-    }
-    return {
-        // Phase 1: Generate storyboard script from chapter text
-        async script({ chapterText, assets }) {
-            return callLLM([
-                { role: "system", content: buildScriptSystemPrompt() },
-                { role: "user", content: buildScriptUserPrompt({ chapterText, assets }) },
-            ], StoryboardScriptSchema);
-        },
-        // Phase 2: Split script into production shots
-        async splitShots({ script, assets, maxDuration = 15 }) {
-            const result = await callLLM([
-                { role: "system", content: "你是顶级AI短剧导演兼表演指导，输出严格JSON。" },
-                {
-                    role: "user",
-                    content: buildSplitShotsPrompt({ script, assets, maxDuration }),
-                },
-            ], ShotListSchema);
-            // V2 post-processing: auto-fill any missing acting/voice fields so that
-            // even if the LLM skips them (it sometimes does), the pipeline still has
-            // concrete performance cues for the video generator.
-            const voiceCache = new Map();
-            for (const shot of result.shots) {
-                // Ensure actingAnchors is present and concrete
-                const sourceText = `${shot.dialogue ?? ""} ${shot.description} ${shot.emotionLabel ?? ""}`;
-                if (!shot.actingAnchors || shot.actingAnchors.length < 5) {
-                    shot.actingAnchors = buildActingAnchors(sourceText);
-                }
-                // Auto-detect emotion label if missing
-                if (!shot.emotionLabel) {
-                    const emotions = detectEmotions(sourceText, 1);
-                    shot.emotionLabel = emotions[0] ?? "";
-                }
-                // Auto-match voice for speaking characters
-                if (shot.dialogue && shot.speaker && !shot.voiceId) {
-                    const char = assets.characters.find((c) => c.name === shot.speaker ||
-                        c.aliases?.includes(shot.speaker ?? ""));
-                    const cacheKey = shot.speaker;
-                    let matched;
-                    if (voiceCache.has(cacheKey)) {
-                        matched = voiceCache.get(cacheKey);
-                    }
-                    else {
-                        matched = matchVoice({
-                            gender: char?.gender,
-                            age: char?.age,
-                            archetype: char?.archetype ?? shot.speaker,
-                            role: shot.speaker,
-                        });
-                        voiceCache.set(cacheKey, matched);
-                    }
-                    shot.voiceId = matched.profile.id;
-                    if (!shot.voiceInstruction && shot.emotionLabel) {
-                        shot.voiceInstruction = buildVoicePerformanceCue(shot.emotionLabel);
-                    }
-                }
-            }
-            return result;
-        },
-        // Phase 2b: Review shots for visual feasibility
-        async reviewShots({ chapterText, shots }) {
-            const reviewPrompt = `你是一位AI视频生成专家，请审查以下分镜镜头列表是否适合AI视频生成。
+}`}function f(n){const r=[];if(n.characters.length>0){r.push("\u89D2\u8272\uFF1A");for(const e of n.characters){const o=e.aliases?.length?`\uFF08\u522B\u540D\uFF1A${e.aliases.join("\u3001")}\uFF09`:"",i=e.gender?`\uFF0C\u6027\u522B\uFF1A${e.gender}`:"",c=e.archetype?`\uFF0C\u7C7B\u578B\uFF1A${e.archetype}`:"";r.push(`- ${e.name}${o}\uFF1A${e.description}${i}${c}`)}}if(n.scenes.length>0){r.push(`
+\u573A\u666F\uFF1A`);for(const e of n.scenes){const o=e.aliases?.length?`\uFF08\u522B\u540D\uFF1A${e.aliases.join("\u3001")}\uFF09`:"";r.push(`- ${e.name}${o}\uFF1A${e.description}`)}}if(n.props.length>0){r.push(`
+\u9053\u5177\uFF1A`);for(const e of n.props){const o=e.aliases?.length?`\uFF08\u522B\u540D\uFF1A${e.aliases.join("\u3001")}\uFF09`:"";r.push(`- ${e.name}${o}\uFF1A${e.description}`)}}return r.join(`
+`)}export function createStoryboardAgent(n){const r=S(n);async function e(o,i){const l=(await r.chat(o,{temperature:.5,maxTokens:8e3})).content??"",a=d(l,i);if(a===null)throw new Error("storyboard agent output: failed to parse or validate JSON");return a}return{async script({chapterText:o,assets:i}){return e([{role:"system",content:x()},{role:"user",content:k({chapterText:o,assets:i})}],v)},async splitShots({script:o,assets:i,maxDuration:c=15}){const l=await e([{role:"system",content:"\u4F60\u662F\u9876\u7EA7AI\u77ED\u5267\u5BFC\u6F14\u517C\u8868\u6F14\u6307\u5BFC\uFF0C\u8F93\u51FA\u4E25\u683CJSON\u3002"},{role:"user",content:N({script:o,assets:i,maxDuration:c})}],ShotListSchema),a=new Map;for(const s of l.shots){const m=`${s.dialogue??""} ${s.description} ${s.emotionLabel??""}`;if((!s.actingAnchors||s.actingAnchors.length<5)&&(s.actingAnchors=y(m)),!s.emotionLabel){const p=b(m,1);s.emotionLabel=p[0]??""}if(s.dialogue&&s.speaker&&!s.voiceId){const p=i.characters.find(g=>g.name===s.speaker||g.aliases?.includes(s.speaker??"")),h=s.speaker;let u;a.has(h)?u=a.get(h):(u=I({gender:p?.gender,age:p?.age,archetype:p?.archetype??s.speaker,role:s.speaker}),a.set(h,u)),s.voiceId=u.profile.id,!s.voiceInstruction&&s.emotionLabel&&(s.voiceInstruction=A(s.emotionLabel))}}return l},async reviewShots({chapterText:o,shots:i}){const c=`\u4F60\u662F\u4E00\u4F4DAI\u89C6\u9891\u751F\u6210\u4E13\u5BB6\uFF0C\u8BF7\u5BA1\u67E5\u4EE5\u4E0B\u5206\u955C\u955C\u5934\u5217\u8868\u662F\u5426\u9002\u5408AI\u89C6\u9891\u751F\u6210\u3002
 
-章节原文：
+\u7AE0\u8282\u539F\u6587\uFF1A
 """
-${chapterText.slice(0, 3000)}
+${o.slice(0,3e3)}
 """
 
-镜头列表：
-${JSON.stringify(shots.shots.slice(0, 30), null, 2)}
+\u955C\u5934\u5217\u8868\uFF1A
+${JSON.stringify(i.shots.slice(0,30),null,2)}
 
-请检查：
-1. 每个镜头是否只包含一个主要动作（AI视频4-15秒内只能完成1-2个动作）
-2. 是否有过于复杂的场景切换或人物过多
-3. 人物站位和动作是否连续合理
-4. 时长是否合理（简单动作4-5秒，复杂情绪6-8秒，运镜8-12秒）
-5. 表演锚点是否具体（不能只有抽象情绪词）
-6. 英文prompt是否适合视频生成（不能太文学化）
-7. 情绪节奏是否有起伏（不能全程一个情绪）
+\u8BF7\u68C0\u67E5\uFF1A
+1. \u6BCF\u4E2A\u955C\u5934\u662F\u5426\u53EA\u5305\u542B\u4E00\u4E2A\u4E3B\u8981\u52A8\u4F5C\uFF08AI\u89C6\u98914-15\u79D2\u5185\u53EA\u80FD\u5B8C\u62101-2\u4E2A\u52A8\u4F5C\uFF09
+2. \u662F\u5426\u6709\u8FC7\u4E8E\u590D\u6742\u7684\u573A\u666F\u5207\u6362\u6216\u4EBA\u7269\u8FC7\u591A
+3. \u4EBA\u7269\u7AD9\u4F4D\u548C\u52A8\u4F5C\u662F\u5426\u8FDE\u7EED\u5408\u7406
+4. \u65F6\u957F\u662F\u5426\u5408\u7406\uFF08\u7B80\u5355\u52A8\u4F5C4-5\u79D2\uFF0C\u590D\u6742\u60C5\u7EEA6-8\u79D2\uFF0C\u8FD0\u955C8-12\u79D2\uFF09
+5. \u8868\u6F14\u951A\u70B9\u662F\u5426\u5177\u4F53\uFF08\u4E0D\u80FD\u53EA\u6709\u62BD\u8C61\u60C5\u7EEA\u8BCD\uFF09
+6. \u82F1\u6587prompt\u662F\u5426\u9002\u5408\u89C6\u9891\u751F\u6210\uFF08\u4E0D\u80FD\u592A\u6587\u5B66\u5316\uFF09
+7. \u60C5\u7EEA\u8282\u594F\u662F\u5426\u6709\u8D77\u4F0F\uFF08\u4E0D\u80FD\u5168\u7A0B\u4E00\u4E2A\u60C5\u7EEA\uFF09
 
-输出严格JSON：
+\u8F93\u51FA\u4E25\u683CJSON\uFF1A
 {
   "feasible": true/false,
-  "issues": [{"shotNumber": 1, "severity": "low|medium|high", "issue": "问题", "suggestion": "修改建议"}],
-  "suggestions": ["整体改进建议"]
-}`;
-            const response = await runtime.chat([
-                { role: "system", content: "你是AI视频生成专家，输出严格JSON。" },
-                { role: "user", content: reviewPrompt },
-            ], { temperature: 0.3, maxTokens: 4000 });
-            const parsed = parseAndValidate(response.content ?? "", ShotReviewResultSchema);
-            if (parsed === null) {
-                throw new Error(`shot review output: failed to parse or validate JSON`);
-            }
-            return parsed;
-        },
-    };
-}
-//# sourceMappingURL=storyboard.js.map
+  "issues": [{"shotNumber": 1, "severity": "low|medium|high", "issue": "\u95EE\u9898", "suggestion": "\u4FEE\u6539\u5EFA\u8BAE"}],
+  "suggestions": ["\u6574\u4F53\u6539\u8FDB\u5EFA\u8BAE"]
+}`,l=await r.chat([{role:"system",content:"\u4F60\u662FAI\u89C6\u9891\u751F\u6210\u4E13\u5BB6\uFF0C\u8F93\u51FA\u4E25\u683CJSON\u3002"},{role:"user",content:c}],{temperature:.3,maxTokens:4e3}),a=d(l.content??"",w);if(a===null)throw new Error("shot review output: failed to parse or validate JSON");return a}}}

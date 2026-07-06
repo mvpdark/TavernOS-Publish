@@ -25,6 +25,7 @@ This repository is the **public distribution** of TavernOS. It contains:
 | Electron shell | Full source |
 | Infrastructure (LLM client, storage, types, i18n) | Full source |
 | Core writing engine (agents, prompts, pipeline, narrative logic) | **Compiled/minified JS only** |
+| Server (API routes, memory/RAG wiring) | **Compiled/minified JS only** |
 
 The core writing engine represents significant proprietary IP and is distributed in compiled form. Source code access is available to commercial licensees.
 

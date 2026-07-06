@@ -1,2 +1,1 @@
-export * from "./vault.js";
-//# sourceMappingURL=index.js.map
+export*from"./vault.js";

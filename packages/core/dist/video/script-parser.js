@@ -1,568 +1,66 @@
-// packages/core/src/video/script-parser.ts
-//
-// Script Parser module — intelligently decomposes a long script/screenplay
-// (up to ~50,000 characters) into structured elements: characters, scenes,
-// props, and per-scene beats (分场概要).
-//
-// Design overview:
-//   1. The input script is too large for a single LLM call, so it is split
-//      into ~5000-character chunks at paragraph boundaries (with a hard-split
-//      fallback for oversized paragraphs).
-//   2. Each chunk is parsed independently by the LLM into a partial result
-//      (characters / scenes / props / beats). Chunks are processed with a
-//      bounded concurrency to balance throughput and rate limits.
-//   3. Partial results are merged and de-duplicated: characters/scenes/props
-//      with the same name are merged (missing fields filled from later
-//      occurrences); beats are concatenated in chunk order and renumbered
-//      sequentially.
-//   4. A single chunk failing to parse never aborts the whole run — it is
-//      reported via an optional callback and skipped.
-//
-// Robustness: the LLM is asked to emit strict JSON. The response is first
-// validated against a strict Zod schema; if that fails, a lenient per-element
-// fallback re-validates each array entry individually so one malformed entry
-// does not discard an entire chunk.
-import { z } from "zod";
-import { createAgentRuntime } from "../agents/base.js";
-import { parseAndValidate, parseJsonObject } from "../agents/json-utils.js";
-// ---------------------------------------------------------------------------
-// Defaults
-// ---------------------------------------------------------------------------
-/** Default chunk size in characters (≈5000 CJK chars per LLM call). */
-const DEFAULT_MAX_CHUNK_SIZE = 5000;
-/** Default concurrency for parallel chunk parsing. */
-const DEFAULT_CONCURRENCY = 3;
-/** Default sampling temperature for structured extraction. */
-const DEFAULT_TEMPERATURE = 0.3;
-/** Default max output tokens per chunk (guards against JSON truncation). */
-const DEFAULT_MAX_TOKENS = 8000;
-// ---------------------------------------------------------------------------
-// Lenient enum-like field schemas
-// ---------------------------------------------------------------------------
-// The LLM occasionally returns Chinese tokens ("男"/"女") or unexpected
-// values for enumerated fields. These schemas coerce any input into the
-// canonical enum, so a single odd value never rejects a whole entry.
-const GenderSchema = z
-    .string()
-    .catch("unknown")
-    .transform((v) => {
-    const g = v.trim().toLowerCase();
-    if (g === "male" || g === "男" || g === "男性" || g === "男主")
-        return "male";
-    if (g === "female" || g === "女" || g === "女性" || g === "女主")
-        return "female";
-    return "unknown";
-});
-const ImportanceSchema = z
-    .string()
-    .catch("minor")
-    .transform((v) => {
-    const i = v.trim().toLowerCase();
-    if (i === "key" || i === "关键" || i === "重要" || i === "main")
-        return "key";
-    return "minor";
-});
-export const ParsedCharacterSchema = z.object({
-    name: z.string().min(1),
-    gender: GenderSchema,
-    ageRange: z.string().optional(),
-    role: z.string().default(""),
-    personality: z.string().default(""),
-    appearance: z.string().optional(),
-    relationships: z.array(z.string()).default([]),
-});
-export const ParsedSceneSchema = z.object({
-    name: z.string().min(1),
-    location: z.string().default(""),
-    timeOfDay: z.string().optional(),
-    mood: z.string().optional(),
-    description: z.string().optional(),
-});
-export const ParsedPropSchema = z.object({
-    name: z.string().min(1),
-    description: z.string().optional(),
-    importance: ImportanceSchema,
-});
-export const ParsedSceneBeatSchema = z.object({
-    sceneNumber: z.number().int().min(1),
-    title: z.string().min(1),
-    characters: z.array(z.string()).default([]),
-    scene: z.string().min(1),
-    summary: z.string().min(1),
-    emotion: z.string().optional(),
-    estimatedDuration: z.number().int().min(1).optional(),
-});
-export const ParsedScriptSchema = z.object({
-    title: z.string().optional(),
-    characters: z.array(ParsedCharacterSchema).default([]),
-    scenes: z.array(ParsedSceneSchema).default([]),
-    props: z.array(ParsedPropSchema).default([]),
-    beats: z.array(ParsedSceneBeatSchema).default([]),
-    totalScenes: z.number().int().min(0).default(0),
-    estimatedTotalDuration: z.number().int().min(0).optional(),
-});
-/** Shape returned by the LLM for a single chunk (no global aggregates). */
-const ScriptChunkSchema = z.object({
-    title: z.string().optional(),
-    characters: z.array(ParsedCharacterSchema).default([]),
-    scenes: z.array(ParsedSceneSchema).default([]),
-    props: z.array(ParsedPropSchema).default([]),
-    beats: z.array(ParsedSceneBeatSchema).default([]),
-});
-// ---------------------------------------------------------------------------
-// LLM prompt
-// ---------------------------------------------------------------------------
-const SCRIPT_PARSER_SYSTEM_PROMPT = `你是 TavernOS 短剧系统的剧本结构解析专家。你的任务是将给定的剧本/小说片段解析为结构化 JSON 数据，提取角色、场景、道具和分场概要（beats）。
+import{z as r}from"zod";import{createAgentRuntime as R}from"../agents/base.js";import{parseAndValidate as A,parseJsonObject as j}from"../agents/json-utils.js";const L=5e3,_=3,x=.3,U=8e3,J=r.string().catch("unknown").transform(n=>{const e=n.trim().toLowerCase();return e==="male"||e==="\u7537"||e==="\u7537\u6027"||e==="\u7537\u4E3B"?"male":e==="female"||e==="\u5973"||e==="\u5973\u6027"||e==="\u5973\u4E3B"?"female":"unknown"}),X=r.string().catch("minor").transform(n=>{const e=n.trim().toLowerCase();return e==="key"||e==="\u5173\u952E"||e==="\u91CD\u8981"||e==="main"?"key":"minor"});export const ParsedCharacterSchema=r.object({name:r.string().min(1),gender:J,ageRange:r.string().optional(),role:r.string().default(""),personality:r.string().default(""),appearance:r.string().optional(),relationships:r.array(r.string()).default([])}),ParsedSceneSchema=r.object({name:r.string().min(1),location:r.string().default(""),timeOfDay:r.string().optional(),mood:r.string().optional(),description:r.string().optional()}),ParsedPropSchema=r.object({name:r.string().min(1),description:r.string().optional(),importance:X}),ParsedSceneBeatSchema=r.object({sceneNumber:r.number().int().min(1),title:r.string().min(1),characters:r.array(r.string()).default([]),scene:r.string().min(1),summary:r.string().min(1),emotion:r.string().optional(),estimatedDuration:r.number().int().min(1).optional()}),ParsedScriptSchema=r.object({title:r.string().optional(),characters:r.array(ParsedCharacterSchema).default([]),scenes:r.array(ParsedSceneSchema).default([]),props:r.array(ParsedPropSchema).default([]),beats:r.array(ParsedSceneBeatSchema).default([]),totalScenes:r.number().int().min(0).default(0),estimatedTotalDuration:r.number().int().min(0).optional()});const P=r.object({title:r.string().optional(),characters:r.array(ParsedCharacterSchema).default([]),scenes:r.array(ParsedSceneSchema).default([]),props:r.array(ParsedPropSchema).default([]),beats:r.array(ParsedSceneBeatSchema).default([])}),v=`\u4F60\u662F TavernOS \u77ED\u5267\u7CFB\u7EDF\u7684\u5267\u672C\u7ED3\u6784\u89E3\u6790\u4E13\u5BB6\u3002\u4F60\u7684\u4EFB\u52A1\u662F\u5C06\u7ED9\u5B9A\u7684\u5267\u672C/\u5C0F\u8BF4\u7247\u6BB5\u89E3\u6790\u4E3A\u7ED3\u6784\u5316 JSON \u6570\u636E\uFF0C\u63D0\u53D6\u89D2\u8272\u3001\u573A\u666F\u3001\u9053\u5177\u548C\u5206\u573A\u6982\u8981\uFF08beats\uFF09\u3002
 
-【输出要求】
-- 只输出一个合法的 JSON 对象，禁止输出 Markdown 代码块、注释或任何解释文字。
-- 所有字符串字段使用中文（gender / importance 除外，使用指定英文枚举值）。
+\u3010\u8F93\u51FA\u8981\u6C42\u3011
+- \u53EA\u8F93\u51FA\u4E00\u4E2A\u5408\u6CD5\u7684 JSON \u5BF9\u8C61\uFF0C\u7981\u6B62\u8F93\u51FA Markdown \u4EE3\u7801\u5757\u3001\u6CE8\u91CA\u6216\u4EFB\u4F55\u89E3\u91CA\u6587\u5B57\u3002
+- \u6240\u6709\u5B57\u7B26\u4E32\u5B57\u6BB5\u4F7F\u7528\u4E2D\u6587\uFF08gender / importance \u9664\u5916\uFF0C\u4F7F\u7528\u6307\u5B9A\u82F1\u6587\u679A\u4E3E\u503C\uFF09\u3002
 
-【JSON 结构】
+\u3010JSON \u7ED3\u6784\u3011
 {
-  "title": "剧本标题（仅当本片段能明确推断出整体标题时填写，否则省略此字段）",
+  "title": "\u5267\u672C\u6807\u9898\uFF08\u4EC5\u5F53\u672C\u7247\u6BB5\u80FD\u660E\u786E\u63A8\u65AD\u51FA\u6574\u4F53\u6807\u9898\u65F6\u586B\u5199\uFF0C\u5426\u5219\u7701\u7565\u6B64\u5B57\u6BB5\uFF09",
   "characters": [
     {
-      "name": "角色名（必填）",
+      "name": "\u89D2\u8272\u540D\uFF08\u5FC5\u586B\uFF09",
       "gender": "male | female | unknown",
-      "ageRange": "年龄段，如 20-25 或 少年（可选）",
-      "role": "角色定位，如 男主/女主/反派/配角/路人",
-      "personality": "性格描述",
-      "appearance": "外貌描述（可选）",
-      "relationships": ["与XX是恋人", "XX的父亲"]
+      "ageRange": "\u5E74\u9F84\u6BB5\uFF0C\u5982 20-25 \u6216 \u5C11\u5E74\uFF08\u53EF\u9009\uFF09",
+      "role": "\u89D2\u8272\u5B9A\u4F4D\uFF0C\u5982 \u7537\u4E3B/\u5973\u4E3B/\u53CD\u6D3E/\u914D\u89D2/\u8DEF\u4EBA",
+      "personality": "\u6027\u683C\u63CF\u8FF0",
+      "appearance": "\u5916\u8C8C\u63CF\u8FF0\uFF08\u53EF\u9009\uFF09",
+      "relationships": ["\u4E0EXX\u662F\u604B\u4EBA", "XX\u7684\u7236\u4EB2"]
     }
   ],
   "scenes": [
     {
-      "name": "场景名，如 雨夜街头",
-      "location": "地点，如 室外街道/室内客厅",
-      "timeOfDay": "白天/夜晚/黄昏/清晨（可选）",
-      "mood": "氛围，如 紧张/温馨/压抑（可选）",
-      "description": "场景描述（可选）"
+      "name": "\u573A\u666F\u540D\uFF0C\u5982 \u96E8\u591C\u8857\u5934",
+      "location": "\u5730\u70B9\uFF0C\u5982 \u5BA4\u5916\u8857\u9053/\u5BA4\u5185\u5BA2\u5385",
+      "timeOfDay": "\u767D\u5929/\u591C\u665A/\u9EC4\u660F/\u6E05\u6668\uFF08\u53EF\u9009\uFF09",
+      "mood": "\u6C1B\u56F4\uFF0C\u5982 \u7D27\u5F20/\u6E29\u99A8/\u538B\u6291\uFF08\u53EF\u9009\uFF09",
+      "description": "\u573A\u666F\u63CF\u8FF0\uFF08\u53EF\u9009\uFF09"
     }
   ],
   "props": [
     {
-      "name": "道具名",
-      "description": "道具描述（可选）",
+      "name": "\u9053\u5177\u540D",
+      "description": "\u9053\u5177\u63CF\u8FF0\uFF08\u53EF\u9009\uFF09",
       "importance": "key | minor"
     }
   ],
   "beats": [
     {
       "sceneNumber": 1,
-      "title": "本场小标题",
-      "characters": ["出场角色名"],
-      "scene": "对应场景名（需与 scenes 中的 name 对应）",
-      "summary": "本场所发生事件的一句话摘要",
-      "emotion": "情绪基调，如 悲伤/愤怒/释然（可选）",
+      "title": "\u672C\u573A\u5C0F\u6807\u9898",
+      "characters": ["\u51FA\u573A\u89D2\u8272\u540D"],
+      "scene": "\u5BF9\u5E94\u573A\u666F\u540D\uFF08\u9700\u4E0E scenes \u4E2D\u7684 name \u5BF9\u5E94\uFF09",
+      "summary": "\u672C\u573A\u6240\u53D1\u751F\u4E8B\u4EF6\u7684\u4E00\u53E5\u8BDD\u6458\u8981",
+      "emotion": "\u60C5\u7EEA\u57FA\u8C03\uFF0C\u5982 \u60B2\u4F24/\u6124\u6012/\u91CA\u7136\uFF08\u53EF\u9009\uFF09",
       "estimatedDuration": 15
     }
   ]
 }
 
-【提取规则】
-1. 角色：提取所有有名或被反复提及的人物。gender 必须是 male/female/unknown（也接受 男/女/男性/女性）。
-2. 场景：提取不同的地点/环境，每个独立场景一个条目；同一地点不同时段可合并或拆分，视剧情而定。
-3. 道具：提取对剧情有作用的物品。推动剧情的关键道具 importance=key，普通道具 importance=minor。
-4. beats：按剧情时间顺序拆分为若干分场概要。每个 beat 是一个连续的戏剧单元（同一场戏内的连续动作/对话）。
-   - sceneNumber 从 1 开始递增（仅限本片段内编号）。
-   - estimatedDuration 单位为秒，短剧节奏快，单场通常 5-60 秒。
-   - characters 填写本场出场的角色名（需与 characters 中的 name 对应）。
-5. characters / scenes / props / beats 数组可为空，但必须存在。
-6. 未提及的可选字段请省略，不要编造；必填字段（name / role 等）不可省略。`;
-/** Build the user-turn prompt for a single chunk. */
-function buildChunkUserPrompt(chunk, index, total) {
-    return [
-        `## 剧本片段 ${index + 1} / ${total}`,
-        "",
-        chunk,
-        "",
-        "---",
-        "请将上述片段解析为 JSON。beats 的 sceneNumber 从 1 开始（仅限本片段内编号）。",
-        "只输出 JSON 对象，不要输出 Markdown 代码块或解释。",
-    ].join("\n");
-}
-// ---------------------------------------------------------------------------
-// Chunking
-// ---------------------------------------------------------------------------
-/**
- * Split a script into chunks of at most `maxChunkSize` characters, preferring
- * paragraph (double-newline) boundaries, then single-newline boundaries, and
- * finally hard-splitting any remaining oversized unit at sentence boundaries.
- */
-function chunkScript(script, maxChunkSize) {
-    const text = script.replace(/\r\n/g, "\n");
-    if (text.length <= maxChunkSize)
-        return [text];
-    // Step 1: split into paragraph units by blank lines.
-    const paragraphs = text.split(/\n{2,}/);
-    // Step 2: further split oversized paragraphs by single newlines.
-    const units = [];
-    for (const para of paragraphs) {
-        if (para.length <= maxChunkSize) {
-            units.push(para);
-            continue;
-        }
-        const lines = para.split(/\n/);
-        let buf = "";
-        for (const line of lines) {
-            if (buf.length === 0) {
-                buf = line;
-            }
-            else if (buf.length + 1 + line.length <= maxChunkSize) {
-                buf += "\n" + line;
-            }
-            else {
-                units.push(buf);
-                buf = line;
-            }
-        }
-        if (buf.length > 0)
-            units.push(buf);
-    }
-    // Step 3: greedily pack units into chunks, joining with a blank line.
-    const packed = [];
-    let current = "";
-    for (const unit of units) {
-        if (current.length === 0) {
-            current = unit;
-        }
-        else if (current.length + 2 + unit.length <= maxChunkSize) {
-            current += "\n\n" + unit;
-        }
-        else {
-            packed.push(current);
-            current = unit;
-        }
-    }
-    if (current.length > 0)
-        packed.push(current);
-    // Step 4: hard-split any chunk still over the limit (no newline boundaries).
-    const result = [];
-    for (const chunk of packed) {
-        for (const piece of hardSplit(chunk, maxChunkSize)) {
-            if (piece.length > 0)
-                result.push(piece);
-        }
-    }
-    return result;
-}
-/**
- * Hard-split a single text block at sentence boundaries (。！？!?\n) when it
- * exceeds `maxChunkSize`. Falls back to a clean character cut if no boundary
- * is found in the latter half of the window.
- */
-function hardSplit(text, maxChunkSize) {
-    if (text.length <= maxChunkSize)
-        return [text];
-    const result = [];
-    const minBoundary = Math.floor(maxChunkSize * 0.5);
-    let start = 0;
-    while (start < text.length) {
-        let end = Math.min(start + maxChunkSize, text.length);
-        if (end < text.length) {
-            let boundary = -1;
-            for (let i = end - 1; i > start + minBoundary; i--) {
-                const ch = text[i];
-                if (ch === "。" || ch === "！" || ch === "？" || ch === "!" || ch === "?" || ch === "\n") {
-                    boundary = i;
-                    break;
-                }
-            }
-            if (boundary > 0)
-                end = boundary + 1;
-        }
-        result.push(text.slice(start, end));
-        start = end;
-    }
-    return result;
-}
-// ---------------------------------------------------------------------------
-// Concurrency-limited map (preserves input order in the result array)
-// ---------------------------------------------------------------------------
-async function mapWithConcurrency(items, fn, concurrency) {
-    const results = new Array(items.length);
-    let cursor = 0;
-    async function worker() {
-        for (;;) {
-            const idx = cursor++;
-            if (idx >= items.length)
-                return;
-            results[idx] = await fn(items[idx], idx);
-        }
-    }
-    const workers = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, () => worker());
-    await Promise.all(workers);
-    return results;
-}
-// ---------------------------------------------------------------------------
-// Merge / de-duplicate helpers
-// ---------------------------------------------------------------------------
-/** Normalize a name into a stable comparison key (trim, drop spaces, lowercase). */
-function normalizeName(name) {
-    return name.trim().replace(/\s+/g, "").toLowerCase();
-}
-/** De-duplicate a string list by trimmed-case-insensitive key, preserving order. */
-function dedupeStrings(list) {
-    const seen = new Set();
-    const out = [];
-    for (const s of list) {
-        const key = s.trim().toLowerCase();
-        if (key.length === 0 || seen.has(key))
-            continue;
-        seen.add(key);
-        out.push(s);
-    }
-    return out;
-}
-/** Return the longer of two optional strings (by trimmed length). */
-function preferLonger(a, b) {
-    const al = a?.trim().length ?? 0;
-    const bl = b?.trim().length ?? 0;
-    if (al === 0 && bl === 0)
-        return undefined;
-    return al >= bl ? a ?? b : b ?? a;
-}
-/** Merge two characters with the same name, filling missing fields. */
-function mergeOneCharacter(a, b) {
-    return {
-        name: a.name || b.name,
-        gender: a.gender !== "unknown" ? a.gender : b.gender,
-        ageRange: a.ageRange ?? b.ageRange,
-        role: a.role || b.role,
-        personality: a.personality || b.personality,
-        appearance: a.appearance ?? b.appearance,
-        relationships: dedupeStrings([...(a.relationships ?? []), ...(b.relationships ?? [])]),
-    };
-}
-/** Merge two scenes with the same name, filling missing fields. */
-function mergeOneScene(a, b) {
-    return {
-        name: a.name || b.name,
-        location: a.location || b.location,
-        timeOfDay: a.timeOfDay ?? b.timeOfDay,
-        mood: a.mood ?? b.mood,
-        description: preferLonger(a.description, b.description),
-    };
-}
-/** Merge two props with the same name; "key" importance wins over "minor". */
-function mergeOneProp(a, b) {
-    return {
-        name: a.name || b.name,
-        description: preferLonger(a.description, b.description),
-        importance: a.importance === "key" || b.importance === "key" ? "key" : "minor",
-    };
-}
-/** Merge character lists from all chunks, de-duplicating by normalized name. */
-function mergeCharacters(chunks) {
-    const map = new Map();
-    for (const list of chunks) {
-        for (const c of list) {
-            const key = normalizeName(c.name);
-            const existing = map.get(key);
-            map.set(key, existing ? mergeOneCharacter(existing, c) : { ...c });
-        }
-    }
-    return [...map.values()];
-}
-/** Merge scene lists from all chunks, de-duplicating by normalized name. */
-function mergeScenes(chunks) {
-    const map = new Map();
-    for (const list of chunks) {
-        for (const s of list) {
-            const key = normalizeName(s.name);
-            const existing = map.get(key);
-            map.set(key, existing ? mergeOneScene(existing, s) : { ...s });
-        }
-    }
-    return [...map.values()];
-}
-/** Merge prop lists from all chunks, de-duplicating by normalized name. */
-function mergeProps(chunks) {
-    const map = new Map();
-    for (const list of chunks) {
-        for (const p of list) {
-            const key = normalizeName(p.name);
-            const existing = map.get(key);
-            map.set(key, existing ? mergeOneProp(existing, p) : { ...p });
-        }
-    }
-    return [...map.values()];
-}
-/**
- * Concatenate beats from all chunks in chunk order and renumber `sceneNumber`
- * sequentially from 1. Chunk order is preserved because the results array
- * returned by {@link mapWithConcurrency} follows input order.
- */
-function mergeBeats(chunks) {
-    const all = [];
-    for (const list of chunks) {
-        for (const b of list)
-            all.push(b);
-    }
-    return all.map((b, i) => ({ ...b, sceneNumber: i + 1 }));
-}
-// ---------------------------------------------------------------------------
-// Parsing helpers
-// ---------------------------------------------------------------------------
-/** A fresh empty chunk (used as a fallback when parsing fails). */
-function emptyChunk() {
-    return ScriptChunkSchema.parse({});
-}
-/** A fresh empty parsed script (used for empty input). */
-function emptyParsedScript() {
-    return {
-        characters: [],
-        scenes: [],
-        props: [],
-        beats: [],
-        totalScenes: 0,
-    };
-}
-/** Validate each element of `raw` against `schema`, silently dropping invalid ones. */
-function filterValid(raw, schema) {
-    if (!Array.isArray(raw))
-        return [];
-    const out = [];
-    for (const item of raw) {
-        const r = schema.safeParse(item);
-        if (r.success)
-            out.push(r.data);
-    }
-    return out;
-}
-/**
- * Lenient fallback parser: extract the top-level JSON object, then validate
- * each array element individually so a single malformed entry does not
- * discard the whole chunk.
- */
-function parseLenientChunk(text) {
-    const raw = parseJsonObject(text);
-    if (raw === null || typeof raw !== "object")
-        return emptyChunk();
-    const obj = raw;
-    const title = typeof obj.title === "string" && obj.title.trim().length > 0 ? obj.title : undefined;
-    return {
-        title,
-        characters: filterValid(obj.characters, ParsedCharacterSchema),
-        scenes: filterValid(obj.scenes, ParsedSceneSchema),
-        props: filterValid(obj.props, ParsedPropSchema),
-        beats: filterValid(obj.beats, ParsedSceneBeatSchema),
-    };
-}
-// ---------------------------------------------------------------------------
-// ScriptParser
-// ---------------------------------------------------------------------------
-/**
- * Intelligent script parser.
- *
- * Splits a long script (up to ~50k characters) into chunks, parses each chunk
- * via the LLM into characters / scenes / props / beats, then merges and
- * de-duplicates the results. A single chunk failure is non-fatal.
- *
- * @example
- * ```ts
- * const parser = new ScriptParser(ctx);
- * const result = await parser.parse(novelText, {
- *   onProgress: (cur, total) => console.log(`${cur}/${total}`),
- * });
- * ```
- */
-export class ScriptParser {
-    runtime;
-    constructor(ctx) {
-        this.runtime = createAgentRuntime(ctx);
-    }
-    /**
-     * Parse a full script into structured elements.
-     *
-     * @param script   The raw script / novel text.
-     * @param options  Chunking, concurrency, progress, and abort options.
-     * @returns        The merged {@link ParsedScript}.
-     */
-    async parse(script, options) {
-        const maxChunkSize = Math.max(500, options?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE);
-        const concurrency = Math.max(1, options?.concurrency ?? DEFAULT_CONCURRENCY);
-        const temperature = options?.temperature ?? DEFAULT_TEMPERATURE;
-        const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
-        const signal = options?.signal;
-        const onProgress = options?.onProgress;
-        const onChunkError = options?.onChunkError;
-        const text = (script ?? "").replace(/\r\n/g, "\n");
-        if (text.trim().length === 0) {
-            return emptyParsedScript();
-        }
-        const chunks = chunkScript(text, maxChunkSize);
-        const total = chunks.length;
-        onProgress?.(0, total);
-        let completed = 0;
-        const chunkResults = await mapWithConcurrency(chunks, async (chunk, index) => {
-            try {
-                if (signal?.aborted)
-                    throw new Error("aborted");
-                return await this.parseChunk(chunk, index, total, { temperature, maxTokens, signal });
-            }
-            catch (err) {
-                onChunkError?.(index, err);
-                return emptyChunk();
-            }
-            finally {
-                completed++;
-                onProgress?.(completed, total);
-            }
-        }, concurrency);
-        const characters = mergeCharacters(chunkResults.map((r) => r.characters));
-        const scenes = mergeScenes(chunkResults.map((r) => r.scenes));
-        const props = mergeProps(chunkResults.map((r) => r.props));
-        const beats = mergeBeats(chunkResults.map((r) => r.beats));
-        const title = chunkResults
-            .map((r) => r.title)
-            .find((t) => typeof t === "string" && t.trim().length > 0);
-        const estimatedTotalDuration = beats.reduce((sum, b) => sum + (b.estimatedDuration ?? 0), 0);
-        return {
-            title,
-            characters,
-            scenes,
-            props,
-            beats,
-            totalScenes: beats.length,
-            estimatedTotalDuration: estimatedTotalDuration > 0 ? estimatedTotalDuration : undefined,
-        };
-    }
-    /**
-     * Parse a single chunk. Tries the strict schema first, then falls back to a
-     * lenient per-element parse so one bad entry does not discard the chunk.
-     */
-    async parseChunk(chunk, index, total, chatOpts) {
-        const messages = [
-            { role: "system", content: SCRIPT_PARSER_SYSTEM_PROMPT },
-            { role: "user", content: buildChunkUserPrompt(chunk, index, total) },
-        ];
-        const response = await this.runtime.chat(messages, {
-            temperature: chatOpts.temperature,
-            maxTokens: chatOpts.maxTokens,
-            signal: chatOpts.signal,
-        });
-        const strict = parseAndValidate(response.content, ScriptChunkSchema);
-        if (strict !== null)
-            return strict;
-        // Lenient fallback: validate each element individually.
-        return parseLenientChunk(response.content);
-    }
-}
-// ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
-// All public symbols are exported inline via `export` on their declarations
-// above (interfaces, Zod schemas, the ScriptParser class, and the
-// ScriptParseOptions interface). They are aggregated here as a quick index
-// for readers; no re-export statement is used to avoid TS2323 redeclaration.
-//
-// Exported:
-//   - class    ScriptParser
-//   - schema   ParsedCharacterSchema / ParsedSceneSchema / ParsedPropSchema /
-//              ParsedSceneBeatSchema / ParsedScriptSchema
-//   - type     ParsedCharacter / ParsedScene / ParsedProp / ParsedSceneBeat /
-//              ParsedScript / ScriptParseOptions
-//# sourceMappingURL=script-parser.js.map
+\u3010\u63D0\u53D6\u89C4\u5219\u3011
+1. \u89D2\u8272\uFF1A\u63D0\u53D6\u6240\u6709\u6709\u540D\u6216\u88AB\u53CD\u590D\u63D0\u53CA\u7684\u4EBA\u7269\u3002gender \u5FC5\u987B\u662F male/female/unknown\uFF08\u4E5F\u63A5\u53D7 \u7537/\u5973/\u7537\u6027/\u5973\u6027\uFF09\u3002
+2. \u573A\u666F\uFF1A\u63D0\u53D6\u4E0D\u540C\u7684\u5730\u70B9/\u73AF\u5883\uFF0C\u6BCF\u4E2A\u72EC\u7ACB\u573A\u666F\u4E00\u4E2A\u6761\u76EE\uFF1B\u540C\u4E00\u5730\u70B9\u4E0D\u540C\u65F6\u6BB5\u53EF\u5408\u5E76\u6216\u62C6\u5206\uFF0C\u89C6\u5267\u60C5\u800C\u5B9A\u3002
+3. \u9053\u5177\uFF1A\u63D0\u53D6\u5BF9\u5267\u60C5\u6709\u4F5C\u7528\u7684\u7269\u54C1\u3002\u63A8\u52A8\u5267\u60C5\u7684\u5173\u952E\u9053\u5177 importance=key\uFF0C\u666E\u901A\u9053\u5177 importance=minor\u3002
+4. beats\uFF1A\u6309\u5267\u60C5\u65F6\u95F4\u987A\u5E8F\u62C6\u5206\u4E3A\u82E5\u5E72\u5206\u573A\u6982\u8981\u3002\u6BCF\u4E2A beat \u662F\u4E00\u4E2A\u8FDE\u7EED\u7684\u620F\u5267\u5355\u5143\uFF08\u540C\u4E00\u573A\u620F\u5185\u7684\u8FDE\u7EED\u52A8\u4F5C/\u5BF9\u8BDD\uFF09\u3002
+   - sceneNumber \u4ECE 1 \u5F00\u59CB\u9012\u589E\uFF08\u4EC5\u9650\u672C\u7247\u6BB5\u5185\u7F16\u53F7\uFF09\u3002
+   - estimatedDuration \u5355\u4F4D\u4E3A\u79D2\uFF0C\u77ED\u5267\u8282\u594F\u5FEB\uFF0C\u5355\u573A\u901A\u5E38 5-60 \u79D2\u3002
+   - characters \u586B\u5199\u672C\u573A\u51FA\u573A\u7684\u89D2\u8272\u540D\uFF08\u9700\u4E0E characters \u4E2D\u7684 name \u5BF9\u5E94\uFF09\u3002
+5. characters / scenes / props / beats \u6570\u7EC4\u53EF\u4E3A\u7A7A\uFF0C\u4F46\u5FC5\u987B\u5B58\u5728\u3002
+6. \u672A\u63D0\u53CA\u7684\u53EF\u9009\u5B57\u6BB5\u8BF7\u7701\u7565\uFF0C\u4E0D\u8981\u7F16\u9020\uFF1B\u5FC5\u586B\u5B57\u6BB5\uFF08name / role \u7B49\uFF09\u4E0D\u53EF\u7701\u7565\u3002`;function F(n,e,t){return[`## \u5267\u672C\u7247\u6BB5 ${e+1} / ${t}`,"",n,"","---","\u8BF7\u5C06\u4E0A\u8FF0\u7247\u6BB5\u89E3\u6790\u4E3A JSON\u3002beats \u7684 sceneNumber \u4ECE 1 \u5F00\u59CB\uFF08\u4EC5\u9650\u672C\u7247\u6BB5\u5185\u7F16\u53F7\uFF09\u3002","\u53EA\u8F93\u51FA JSON \u5BF9\u8C61\uFF0C\u4E0D\u8981\u8F93\u51FA Markdown \u4EE3\u7801\u5757\u6216\u89E3\u91CA\u3002"].join(`
+`)}function B(n,e){const t=n.replace(/\r\n/g,`
+`);if(t.length<=e)return[t];const o=t.split(/\n{2,}/),s=[];for(const c of o){if(c.length<=e){s.push(c);continue}const f=c.split(/\n/);let u="";for(const p of f)u.length===0?u=p:u.length+1+p.length<=e?u+=`
+`+p:(s.push(u),u=p);u.length>0&&s.push(u)}const a=[];let i="";for(const c of s)i.length===0?i=c:i.length+2+c.length<=e?i+=`
+
+`+c:(a.push(i),i=c);i.length>0&&a.push(i);const l=[];for(const c of a)for(const f of I(c,e))f.length>0&&l.push(f);return l}function I(n,e){if(n.length<=e)return[n];const t=[],o=Math.floor(e*.5);let s=0;for(;s<n.length;){let a=Math.min(s+e,n.length);if(a<n.length){let i=-1;for(let l=a-1;l>s+o;l--){const c=n[l];if(c==="\u3002"||c==="\uFF01"||c==="\uFF1F"||c==="!"||c==="?"||c===`
+`){i=l;break}}i>0&&(a=i+1)}t.push(n.slice(s,a)),s=a}return t}async function K(n,e,t){const o=new Array(n.length);let s=0;async function a(){for(;;){const l=s++;if(l>=n.length)return;o[l]=await e(n[l],l)}}const i=Array.from({length:Math.min(Math.max(1,t),n.length)},()=>a());return await Promise.all(i),o}function S(n){return n.trim().replace(/\s+/g,"").toLowerCase()}function V(n){const e=new Set,t=[];for(const o of n){const s=o.trim().toLowerCase();s.length===0||e.has(s)||(e.add(s),t.push(o))}return t}function T(n,e){const t=n?.trim().length??0,o=e?.trim().length??0;if(!(t===0&&o===0))return t>=o?n??e:e??n}function Y(n,e){return{name:n.name||e.name,gender:n.gender!=="unknown"?n.gender:e.gender,ageRange:n.ageRange??e.ageRange,role:n.role||e.role,personality:n.personality||e.personality,appearance:n.appearance??e.appearance,relationships:V([...n.relationships??[],...e.relationships??[]])}}function $(n,e){return{name:n.name||e.name,location:n.location||e.location,timeOfDay:n.timeOfDay??e.timeOfDay,mood:n.mood??e.mood,description:T(n.description,e.description)}}function G(n,e){return{name:n.name||e.name,description:T(n.description,e.description),importance:n.importance==="key"||e.importance==="key"?"key":"minor"}}function H(n){const e=new Map;for(const t of n)for(const o of t){const s=S(o.name),a=e.get(s);e.set(s,a?Y(a,o):{...o})}return[...e.values()]}function W(n){const e=new Map;for(const t of n)for(const o of t){const s=S(o.name),a=e.get(s);e.set(s,a?$(a,o):{...o})}return[...e.values()]}function Z(n){const e=new Map;for(const t of n)for(const o of t){const s=S(o.name),a=e.get(s);e.set(s,a?G(a,o):{...o})}return[...e.values()]}function q(n){const e=[];for(const t of n)for(const o of t)e.push(o);return e.map((t,o)=>({...t,sceneNumber:o+1}))}function C(){return P.parse({})}function Q(){return{characters:[],scenes:[],props:[],beats:[],totalScenes:0}}function d(n,e){if(!Array.isArray(n))return[];const t=[];for(const o of n){const s=e.safeParse(o);s.success&&t.push(s.data)}return t}function z(n){const e=j(n);if(e===null||typeof e!="object")return C();const t=e;return{title:typeof t.title=="string"&&t.title.trim().length>0?t.title:void 0,characters:d(t.characters,ParsedCharacterSchema),scenes:d(t.scenes,ParsedSceneSchema),props:d(t.props,ParsedPropSchema),beats:d(t.beats,ParsedSceneBeatSchema)}}export class ScriptParser{runtime;constructor(e){this.runtime=R(e)}async parse(e,t){const o=Math.max(500,t?.maxChunkSize??L),s=Math.max(1,t?.concurrency??_),a=t?.temperature??x,i=t?.maxTokens??U,l=t?.signal,c=t?.onProgress,f=t?.onChunkError,u=(e??"").replace(/\r\n/g,`
+`);if(u.trim().length===0)return Q();const p=B(u,o),y=p.length;c?.(0,y);let w=0;const g=await K(p,async(m,h)=>{try{if(l?.aborted)throw new Error("aborted");return await this.parseChunk(m,h,y,{temperature:a,maxTokens:i,signal:l})}catch(N){return f?.(h,N),C()}finally{w++,c?.(w,y)}},s),D=H(g.map(m=>m.characters)),M=W(g.map(m=>m.scenes)),O=Z(g.map(m=>m.props)),k=q(g.map(m=>m.beats)),E=g.map(m=>m.title).find(m=>typeof m=="string"&&m.trim().length>0),b=k.reduce((m,h)=>m+(h.estimatedDuration??0),0);return{title:E,characters:D,scenes:M,props:O,beats:k,totalScenes:k.length,estimatedTotalDuration:b>0?b:void 0}}async parseChunk(e,t,o,s){const a=[{role:"system",content:v},{role:"user",content:F(e,t,o)}],i=await this.runtime.chat(a,{temperature:s.temperature,maxTokens:s.maxTokens,signal:s.signal}),l=A(i.content,P);return l!==null?l:z(i.content)}}

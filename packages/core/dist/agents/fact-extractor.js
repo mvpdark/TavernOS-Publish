@@ -1,72 +1,36 @@
-import { createAgentRuntime } from "./base.js";
-import { buildTaxonomyText, parseFacts, } from "./fact-taxonomy.js";
-// ---------------------------------------------------------------------------
-// System prompt (Chinese) — built once at module load.
-// ---------------------------------------------------------------------------
-const SYSTEM_PROMPT = "你是一个故事事实抽取智能体。你的任务是从给定的章节内容中提取关键故事事实，并以 JSON 数组的形式输出。\n\n" +
-    "只输出有效的 JSON 数组，不要使用 markdown 代码块，不要添加任何解释文字。\n\n" +
-    `事实分类体系（输出的 domain 与 category 必须使用下列英文值，且 category 必须属于所选 domain）：\n${buildTaxonomyText()}\n\n` +
-    "抽取重点：\n" +
-    "- 人物身份/性格/能力/关系的揭示与变化\n" +
-    "- 世界观规则的揭示\n" +
-    "- 新地点的出现\n" +
-    "- 情节伏笔/悬念的埋设\n" +
-    "- 时间线里程碑\n" +
-    "- 主题冲突\n\n" +
-    "每个事实对象包含以下字段：\n" +
-    "- domain: 字符串，上述 6 个域之一\n" +
-    "- category: 字符串，上述类别之一，必须属于所选 domain\n" +
-    '- label: 简短标签（如 "杨过-身世"）\n' +
-    "- content: 完整的事实陈述\n" +
-    "- weight: 数值 0-100，重要性\n" +
-    "- certainty: 数值 0-1，确信度\n" +
-    "- triggers: 字符串数组，用于检索的关键词\n" +
-    "- emotionalWeight: 数值 -1 到 1，情感权重（-1=负面，0=中性，1=正面）\n\n" +
-    "只提取本章新出现或有显著变化的事实，避免与已有事实重复。若本章无可提取事实，输出空数组 []。";
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
-/**
- * Factory: build a FactExtractor agent by composing a shared runtime.
- * Mirrors the createStateExtractor() pattern in consolidator.ts.
- *
- * Extracts structured StoryFacts from chapter content by constructing an
- * inline prompt asking the LLM to produce a JSON array, then parses the
- * response defensively. On total failure, returns an empty array flagged
- * as degraded so the caller can skip ingestion and flag the chapter.
- */
-export function createFactExtractor(ctx) {
-    const runtime = createAgentRuntime(ctx);
-    const name = "fact-extractor";
-    async function extract(input, options) {
-        const userContent = `## 第 ${input.chapter} 章\n\n${input.chapterContent}\n\n` +
-            `## 故事设定\n${input.storyBible}\n\n` +
-            `## 已有事实摘要（避免重复）\n${input.existingFactsSummary}\n\n` +
-            "请从上述章节内容中提取关键故事事实，输出为 JSON 数组。";
-        const messages = [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userContent },
-        ];
-        try {
-            const response = await runtime.chat(messages, options);
-            const facts = parseFacts(response.content);
-            if (facts !== null) {
-                return { facts, degraded: false };
-            }
-        }
-        catch (e) {
-            // LLM call failed — surface the error on the degraded fallback so the
-            // caller can log/diagnose without a silent swallow.
-            return {
-                facts: [],
-                degraded: true,
-                error: e instanceof Error ? e.message : String(e),
-            };
-        }
-        // Fallback: empty facts, marked as degraded so the caller can skip
-        // ingestion and flag the chapter for retry.
-        return { facts: [], degraded: true };
-    }
-    return { name, extract };
-}
-//# sourceMappingURL=fact-extractor.js.map
+import{createAgentRuntime as d}from"./base.js";import{buildTaxonomyText as g,parseFacts as u}from"./fact-taxonomy.js";const f=`\u4F60\u662F\u4E00\u4E2A\u6545\u4E8B\u4E8B\u5B9E\u62BD\u53D6\u667A\u80FD\u4F53\u3002\u4F60\u7684\u4EFB\u52A1\u662F\u4ECE\u7ED9\u5B9A\u7684\u7AE0\u8282\u5185\u5BB9\u4E2D\u63D0\u53D6\u5173\u952E\u6545\u4E8B\u4E8B\u5B9E\uFF0C\u5E76\u4EE5 JSON \u6570\u7EC4\u7684\u5F62\u5F0F\u8F93\u51FA\u3002
+
+\u53EA\u8F93\u51FA\u6709\u6548\u7684 JSON \u6570\u7EC4\uFF0C\u4E0D\u8981\u4F7F\u7528 markdown \u4EE3\u7801\u5757\uFF0C\u4E0D\u8981\u6DFB\u52A0\u4EFB\u4F55\u89E3\u91CA\u6587\u5B57\u3002
+
+\u4E8B\u5B9E\u5206\u7C7B\u4F53\u7CFB\uFF08\u8F93\u51FA\u7684 domain \u4E0E category \u5FC5\u987B\u4F7F\u7528\u4E0B\u5217\u82F1\u6587\u503C\uFF0C\u4E14 category \u5FC5\u987B\u5C5E\u4E8E\u6240\u9009 domain\uFF09\uFF1A
+${g()}
+
+\u62BD\u53D6\u91CD\u70B9\uFF1A
+- \u4EBA\u7269\u8EAB\u4EFD/\u6027\u683C/\u80FD\u529B/\u5173\u7CFB\u7684\u63ED\u793A\u4E0E\u53D8\u5316
+- \u4E16\u754C\u89C2\u89C4\u5219\u7684\u63ED\u793A
+- \u65B0\u5730\u70B9\u7684\u51FA\u73B0
+- \u60C5\u8282\u4F0F\u7B14/\u60AC\u5FF5\u7684\u57CB\u8BBE
+- \u65F6\u95F4\u7EBF\u91CC\u7A0B\u7891
+- \u4E3B\u9898\u51B2\u7A81
+
+\u6BCF\u4E2A\u4E8B\u5B9E\u5BF9\u8C61\u5305\u542B\u4EE5\u4E0B\u5B57\u6BB5\uFF1A
+- domain: \u5B57\u7B26\u4E32\uFF0C\u4E0A\u8FF0 6 \u4E2A\u57DF\u4E4B\u4E00
+- category: \u5B57\u7B26\u4E32\uFF0C\u4E0A\u8FF0\u7C7B\u522B\u4E4B\u4E00\uFF0C\u5FC5\u987B\u5C5E\u4E8E\u6240\u9009 domain
+- label: \u7B80\u77ED\u6807\u7B7E\uFF08\u5982 "\u6768\u8FC7-\u8EAB\u4E16"\uFF09
+- content: \u5B8C\u6574\u7684\u4E8B\u5B9E\u9648\u8FF0
+- weight: \u6570\u503C 0-100\uFF0C\u91CD\u8981\u6027
+- certainty: \u6570\u503C 0-1\uFF0C\u786E\u4FE1\u5EA6
+- triggers: \u5B57\u7B26\u4E32\u6570\u7EC4\uFF0C\u7528\u4E8E\u68C0\u7D22\u7684\u5173\u952E\u8BCD
+- emotionalWeight: \u6570\u503C -1 \u5230 1\uFF0C\u60C5\u611F\u6743\u91CD\uFF08-1=\u8D1F\u9762\uFF0C0=\u4E2D\u6027\uFF0C1=\u6B63\u9762\uFF09
+
+\u53EA\u63D0\u53D6\u672C\u7AE0\u65B0\u51FA\u73B0\u6216\u6709\u663E\u8457\u53D8\u5316\u7684\u4E8B\u5B9E\uFF0C\u907F\u514D\u4E0E\u5DF2\u6709\u4E8B\u5B9E\u91CD\u590D\u3002\u82E5\u672C\u7AE0\u65E0\u53EF\u63D0\u53D6\u4E8B\u5B9E\uFF0C\u8F93\u51FA\u7A7A\u6570\u7EC4 []\u3002`;export function createFactExtractor(r){const a=d(r),o="fact-extractor";async function c(t,s){const i=`## \u7B2C ${t.chapter} \u7AE0
+
+${t.chapterContent}
+
+## \u6545\u4E8B\u8BBE\u5B9A
+${t.storyBible}
+
+## \u5DF2\u6709\u4E8B\u5B9E\u6458\u8981\uFF08\u907F\u514D\u91CD\u590D\uFF09
+${t.existingFactsSummary}
+
+\u8BF7\u4ECE\u4E0A\u8FF0\u7AE0\u8282\u5185\u5BB9\u4E2D\u63D0\u53D6\u5173\u952E\u6545\u4E8B\u4E8B\u5B9E\uFF0C\u8F93\u51FA\u4E3A JSON \u6570\u7EC4\u3002`,m=[{role:"system",content:f},{role:"user",content:i}];try{const n=await a.chat(m,s),e=u(n.content);if(e!==null)return{facts:e,degraded:!1}}catch(n){return{facts:[],degraded:!0,error:n instanceof Error?n.message:String(n)}}return{facts:[],degraded:!0}}return{name:o,extract:c}}
