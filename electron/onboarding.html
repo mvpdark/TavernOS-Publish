@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>TavernOS - 初始设置</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #050505;
+      color: #EDE1B0;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    .titlebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: #0a0a0a;
+      -webkit-app-region: drag;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .titlebar .title {
+      font-size: 12px;
+      color: #C9A86C;
+      letter-spacing: 2px;
+    }
+    .titlebar .controls {
+      -webkit-app-region: no-drag;
+      display: flex;
+      gap: 8px;
+    }
+    .titlebar .controls button {
+      width: 28px; height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: #666;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .titlebar .controls button:hover {
+      background: #1a1a1a;
+      color: #C9A86C;
+    }
+    .container {
+      padding: 40px 48px;
+      height: calc(100vh - 45px);
+      overflow-y: auto;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo h1 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      background: linear-gradient(110deg, #6E4C12 0%, #D4AF37 34%, #FFF1A6 50%, #C8941C 68%, #6E4C12 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .logo p {
+      font-size: 13px;
+      color: #555;
+      margin-top: 8px;
+      letter-spacing: 4px;
+    }
+    .step-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      transition: all 0.3s;
+    }
+    .step-dot.active {
+      background: #C9A86C;
+      width: 24px;
+      border-radius: 4px;
+    }
+    .step-dot.done {
+      background: #6E4C12;
+    }
+    .panel { display: none; animation: fadeIn 0.3s ease; }
+    .panel.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .panel h2 {
+      font-size: 18px;
+      color: #C9A86C;
+      margin-bottom: 8px;
+    }
+    .panel .desc {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      color: #EDE1B0;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: #C9A86C;
+      background: #0f0f0f;
+    }
+    .form-input::placeholder { color: #333; }
+    .disk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .disk-card {
+      padding: 20px 16px;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .disk-card:hover {
+      border-color: #C9A86C;
+      background: #0f0f0f;
+    }
+    .disk-card.selected {
+      border-color: #C9A86C;
+      background: #C9A86C08;
+      box-shadow: 0 0 12px #C9A86C20;
+    }
+    .disk-card .icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .disk-card .label {
+      font-size: 14px;
+      color: #EDE1B0;
+      font-weight: 600;
+    }
+    .disk-card .path {
+      font-size: 11px;
+      color: #555;
+      margin-top: 4px;
+    }
+    .folder-preview {
+      margin-top: 16px;
+      padding: 16px;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.8;
+    }
+    .folder-preview .root {
+      color: #C9A86C;
+      font-weight: 600;
+    }
+    .folder-preview .sub {
+      padding-left: 16px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+    }
+    .btn {
+      flex: 1;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 1px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #C9A86C, #D4AF37);
+      color: #050505;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px #C9A86C40;
+    }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #0f0f0f;
+      border: 1px solid #1a1a1a;
+      color: #666;
+    }
+    .btn-secondary:hover {
+      border-color: #333;
+      color: #888;
+    }
+    .status-msg {
+      font-size: 12px;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+    .status-msg.success { color: #4a9d6f; }
+    .status-msg.error { color: #9d4a4a; }
+    .status-msg.info { color: #C9A86C; }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .checkbox-row input[type="checkbox"] {
+      accent-color: #C9A86C;
+    }
+    .checkbox-row label {
+      font-size: 13px;
+      color: #888;
+      cursor: pointer;
+    }
+    .complete-icon {
+      text-align: center;
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .model-config-section {
+      margin-top: 16px;
+      padding: 16px;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+    }
+    .model-config-title {
+      margin-bottom: 12px;
+    }
+    .model-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .model-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background: #0f0f0f;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .model-agent {
+      color: #888;
+    }
+    .model-name {
+      color: #C9A86C;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <span class="title">TAVERNOS · 初始设置</span>
+    <div class="controls">
+      <button onclick="window.tavernosAPI.minimizeWindow()">─</button>
+      <button onclick="window.tavernosAPI.closeWindow()">✕</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="logo">
+      <h1>TAVERNOS</h1>
+      <p>AI 创意写作平台</p>
+    </div>
+
+    <div class="step-indicator">
+      <div class="step-dot active" id="dot-1"></div>
+      <div class="step-dot" id="dot-2"></div>
+      <div class="step-dot" id="dot-3"></div>
+    </div>
+
+    <!-- Step 1: Disk Selection -->
+    <div class="panel active" id="panel-1">
+      <h2>选择存储位置</h2>
+      <p class="desc">选择一个本地磁盘，TavernOS 将在该磁盘下创建 <code style="color:#C9A86C;">TavernOS</code> 文件夹，用于存放小说、角色图片、视频等所有创作内容。</p>
+      <div class="disk-grid" id="diskGrid">
+        <div style="grid-column: span 3; text-align: center; color: #444; padding: 40px;">正在检测可用磁盘...</div>
+      </div>
+      <div class="folder-preview" id="folderPreview" style="display:none;">
+        <span class="root">📁 TavernOS/</span>
+        <div class="sub">
+          📁 Novels/ — 小说文本<br>
+          📁 Characters/ — 角色图片<br>
+          📁 ConfirmedSlots/ — 确选卡资源<br>
+          <span style="padding-left:16px; color:#444;">├─ three-views/ — 三视图</span><br>
+          <span style="padding-left:16px; color:#444;">├─ realistic/ — 写实卡</span><br>
+          <span style="padding-left:16px; color:#444;">└─ anime/ — 动漫卡</span>
+        </div>
+      </div>
+      <div class="status-msg" id="status-1"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="skipSetup()">跳过</button>
+        <button class="btn btn-primary" id="btn-next-1" disabled onclick="goStep2()">下一步</button>
+      </div>
+    </div>
+
+    <!-- Step 2: API Key -->
+    <div class="panel" id="panel-2">
+      <h2>配置云雾 API</h2>
+      <p class="desc">输入你的云雾 (Yunwu) API Key，TavernOS 将使用它来调用大语言模型、生成图片和语音。你可以在 <a href="https://yunwu.ai" style="color:#C9A86C;">yunwu.ai</a> 获取密钥。</p>
+      <div class="form-group">
+        <label class="form-label">云雾 API Key</label>
+        <input type="password" class="form-input" id="apiKeyInput" placeholder="sk-..." />
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="useSameKey" checked />
+        <label for="useSameKey">将此密钥同时用于图像生成、语音合成和向量检索</label>
+      </div>
+      <div class="status-msg" id="status-2"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep1()">上一步</button>
+        <button class="btn btn-primary" id="btn-next-2" disabled onclick="goStep3()">下一步</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Confirm -->
+    <div class="panel" id="panel-3">
+      <h2>确认配置</h2>
+      <p class="desc">请确认以下设置。配置完成后，TavernOS 将自动启动。</p>
+      <div class="folder-preview">
+        <div style="margin-bottom: 12px;">
+          <span style="color: #555;">存储位置：</span><br>
+          <span style="color: #C9A86C; font-size: 14px;" id="confirmPath">—</span>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <span style="color: #555;">API Key：</span><br>
+          <span style="color: #C9A86C; font-size: 14px;" id="confirmKey">—</span>
+        </div>
+      </div>
+      <div class="model-config-section">
+        <div class="model-config-title">
+          <span style="color: #C9A86C; font-size: 13px;">⚡ Agent 模型已自动配置</span>
+          <span style="color: #555; font-size: 11px; margin-left: 8px;">无需手动设置，开箱即用</span>
+        </div>
+        <div class="model-list" id="modelList">
+          <div class="model-row">
+            <span class="model-agent">大纲规划</span>
+            <span class="model-name">Claude Opus 4.8</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">写作·骨架阶段</span>
+            <span class="model-name">Kimi K2.6 (256K上下文)</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">写作·血肉阶段</span>
+            <span class="model-name">Claude Sonnet 4.6</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">一致性审查</span>
+            <span class="model-name">DeepSeek V4 Pro</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">修订润色</span>
+            <span class="model-name">Claude Opus 4.8</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">状态提取</span>
+            <span class="model-name">Gemini 3.1 Pro (2M上下文)</span>
+          </div>
+          <div class="model-row">
+            <span class="model-agent">蓝图顾问</span>
+            <span class="model-name">GPT-5.5</span>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: #444; margin-top: 8px; padding-left: 4px;">
+          全局默认模型：Claude Opus 4.8 · 图像生成：DALL-E 3 · 语音合成：TTS-1 · 向量检索：text-embedding-3-small
+        </div>
+      </div>
+      <div class="status-msg" id="status-3"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep2()">上一步</button>
+        <button class="btn btn-primary" id="btn-finish" onclick="finishSetup()">完成设置</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedDisk = null;
+    let createdPath = null;
+    let apiKey = "";
+
+    // Escape dynamic strings before injecting into innerHTML to prevent
+    // DOM-based injection via crafted error messages or disk labels.
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    // ---- Load available disks ----
+    async function loadDisks() {
+      const grid = document.getElementById("diskGrid");
+      try {
+        const disks = await window.tavernosAPI.getAvailableDisks();
+        if (!disks || disks.length === 0) {
+          grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #9d4a4a; padding: 40px;">未检测到可用磁盘</div>';
+          return;
+        }
+        grid.innerHTML = disks.map(d => `
+          <div class="disk-card" data-drive="${escapeHtml(d.drive)}" onclick="selectDisk('${escapeHtml(d.drive)}', this)">
+            <div class="icon">💾</div>
+            <div class="label">${escapeHtml(d.label)}</div>
+            <div class="path">TavernOS\\</div>
+          </div>
+        `).join("");
+      } catch (e) {
+        grid.innerHTML = `<div style="grid-column: span 3; text-align: center; color: #9d4a4a; padding: 40px;">检测磁盘失败: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function selectDisk(drive, el) {
+      // Remove previous selection
+      document.querySelectorAll(".disk-card").forEach(c => c.classList.remove("selected"));
+      el.classList.add("selected");
+
+      const status = document.getElementById("status-1");
+      status.className = "status-msg info";
+      status.textContent = "正在创建文件夹...";
+
+      try {
+        const result = await window.tavernosAPI.selectDisk(drive + "\\");
+        if (result.success) {
+          selectedDisk = drive;
+          createdPath = result.path;
+          status.className = "status-msg success";
+          status.textContent = `已创建: ${result.path}`;
+          document.getElementById("folderPreview").style.display = "block";
+          document.getElementById("btn-next-1").disabled = false;
+        } else {
+          status.className = "status-msg error";
+          status.textContent = `创建失败: ${result.error}`;
+        }
+      } catch (e) {
+        status.className = "status-msg error";
+        status.textContent = `错误: ${e.message}`;
+      }
+    }
+
+    // ---- Navigation ----
+    function goStep1() {
+      showPanel(1);
+    }
+    function goStep2() {
+      showPanel(2);
+    }
+    function goStep3() {
+      apiKey = document.getElementById("apiKeyInput").value.trim();
+      document.getElementById("confirmPath").textContent = createdPath || "未选择";
+      document.getElementById("confirmKey").textContent = apiKey ? apiKey.slice(0, 8) + "..." + apiKey.slice(-4) : "未填写";
+      showPanel(3);
+    }
+    function showPanel(n) {
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      document.getElementById(`panel-${n}`).classList.add("active");
+      // Update dots
+      for (let i = 1; i <= 3; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        dot.classList.remove("active", "done");
+        if (i < n) dot.classList.add("done");
+        else if (i === n) dot.classList.add("active");
+      }
+    }
+
+    // ---- API Key validation ----
+    document.getElementById("apiKeyInput").addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      document.getElementById("btn-next-2").disabled = val.length < 10;
+    });
+
+    // ---- Finish ----
+    async function finishSetup() {
+      const btn = document.getElementById("btn-finish");
+      const status = document.getElementById("status-3");
+      btn.disabled = true;
+      btn.textContent = "保存中...";
+      status.className = "status-msg info";
+      status.textContent = "正在保存配置...";
+
+      try {
+        const result = await window.tavernosAPI.saveOnboardingConfig({
+          localPath: createdPath,
+          apiKey: apiKey,
+        });
+        if (result.success) {
+          status.className = "status-msg success";
+          status.textContent = "配置已保存！正在启动...";
+          setTimeout(() => {
+            window.tavernosAPI.onboardingComplete();
+          }, 1000);
+        } else {
+          status.className = "status-msg error";
+          status.textContent = `保存失败: ${result.error}`;
+          btn.disabled = false;
+          btn.textContent = "完成设置";
+        }
+      } catch (e) {
+        status.className = "status-msg error";
+        status.textContent = `错误: ${e.message}`;
+        btn.disabled = false;
+        btn.textContent = "完成设置";
+      }
+    }
+
+    function skipSetup() {
+      window.tavernosAPI.onboardingSkip();
+    }
+
+    // ---- Initialize ----
+    loadDisks();
+  </script>
+</body>
+</html>

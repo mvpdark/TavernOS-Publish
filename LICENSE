@@ -1,0 +1,6 @@
+GNU General Public License v3.0
+
+This project's UI, Electron shell, and infrastructure components are licensed under GPL v3.
+The core writing engine (packages/core/dist/) is proprietary and distributed in compiled form only.
+
+See https://www.gnu.org/licenses/gpl-3.0.html for the full GPL v3 license text.

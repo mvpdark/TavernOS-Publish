@@ -1,0 +1,36 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.tavernos/secrets.json
+.tavernos/data/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+reference/
+node_modules_old_*/
+*.lock.yaml
+# pnpm-lock.yaml SHOULD be committed — lockfiles ensure reproducible installs
+!pnpm-lock.yaml
+*.tgz
+.vite/
+temp/
+
+# Electron build artifacts
+release/
+dist-server/
+dist-node/
+electron/build/node/
+electron/runtime-modules/
+
+# Backup / temp files
+*.bak
+*.bak_*
+*.orig
+packages/studio/test_*.mjs

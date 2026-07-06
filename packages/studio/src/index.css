@@ -1,0 +1,620 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+ * Noir Atelier Design System — Dark Theme
+ * Full black background, warm amber accents, film grain texture
+ * =========================================================================== */
+
+:root {
+  /* Background layers */
+  --color-bg: #0A0A0A;
+  --color-hover-bg: #141414;
+  --color-surface: #141414;
+  --color-surface-raised: #18181B;
+  --color-surface-sunken: #0D0D0D;
+  --color-surface-hover: #1C1C1E;
+  --color-border: #1A1A1A;
+  --color-border-subtle: #151515;
+  --color-border-strong: #2A2A2A;
+  --color-border-accent: rgba(201,168,108,0.3);
+
+  /* Text colors — four-level hierarchy for dark theme */
+  --color-text: #E8E8E8;
+  --color-text-muted: #A0A0A0;
+  --color-text-faint: #6E6E6E;
+  --color-text-placeholder: #555555;
+  --color-text-inverse: #0A0A0A;
+
+  /* Amber accent system */
+  --color-primary: #C9A86C;
+  --color-primary-hover: #D4B884;
+  --color-primary-500: #C9A86C;
+  --color-primary-tint: rgba(201,168,108,0.06);
+  --color-primary-tint-strong: rgba(201,168,108,0.12);
+  --color-primary-border: rgba(201,168,108,0.25);
+  --color-primary-glow: rgba(201,168,108,0.12);
+
+  /* Sidebar */
+  --color-sidebar-bg: #0A0A0A;
+  --color-sidebar-text: #E8E8E8;
+  --color-sidebar-active: #1C1C1E;
+  --color-sidebar-hover: #141414;
+  --color-sidebar-muted: #A0A0A0;
+
+  /* Status colors */
+  --color-danger: #C9685A;
+  --color-danger-bg: rgba(201,104,90,0.08);
+  --color-danger-border: rgba(201,104,90,0.2);
+  --color-success: #6C9A7A;
+  --color-success-bg: rgba(108,154,122,0.08);
+  --color-success-border: rgba(108,154,122,0.2);
+  --color-warning-bg: rgba(201,168,108,0.08);
+  --color-warning-text: #C9A86C;
+  --color-overlay: rgba(0,0,0,0.7);
+
+  /* Info (blue) */
+  --color-info: #6B9BD1;
+  --color-info-bg: rgba(107,155,209,0.08);
+  --color-info-border: rgba(107,155,209,0.2);
+
+  /* Purple accent */
+  --color-purple: #9B7FC2;
+  --color-purple-bg: rgba(155,127,194,0.08);
+  --color-purple-border: rgba(155,127,194,0.2);
+
+  /* Typography */
+  --font-size-base: 14px;
+  --radius-bubble: 8px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-modal: 16px;
+  --bg-image: none;
+
+  /* Animation tokens */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Shadow tokens for dark theme */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.7);
+  --shadow-glow: 0 0 16px var(--color-primary-glow);
+
+  /* Surface top highlight — creates physical depth */
+  --surface-highlight: inset 0 1px 0 rgba(255,255,255,0.03);
+
+  /* Film grain texture */
+  --grain-opacity: 0.03;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI",
+    "SF Pro Display", "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus ring — visible, high-contrast, keyboard-only
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid rgba(201, 168, 108, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: rgba(201, 168, 108, 0.7) !important;
+  box-shadow: 0 0 0 3px rgba(201, 168, 108, 0.15) !important;
+}
+
+button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(201, 168, 108, 0.2);
+}
+
+option:checked,
+option:checked:hover {
+  background-color: rgba(201, 168, 108, 0.85) !important;
+  color: #0A0A0A !important;
+}
+option:hover {
+  background-color: rgba(201, 168, 108, 0.25) !important;
+}
+
+/* Film grain overlay — below modals (z-index: 1) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Subtle vignette — below modals */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.25) 100%);
+}
+
+/* ===========================================================================
+ * Tailwind utility overrides — redirect to Noir Atelier CSS variables
+ * =========================================================================== */
+@layer utilities {
+  /* --- Background colors --- */
+  .bg-gray-50 { background-color: var(--color-bg); }
+  .bg-gray-100 { background-color: var(--color-hover-bg); }
+  .bg-gray-200 { background-color: var(--color-surface); }
+  .bg-gray-300 { background-color: var(--color-surface-hover); }
+  .bg-gray-700 { background-color: var(--color-sidebar-active); }
+  .bg-gray-800 { background-color: var(--color-sidebar-hover); }
+  .bg-gray-900 { background-color: var(--color-sidebar-bg); }
+  .bg-white { background-color: var(--color-surface); }
+  .bg-black { background-color: var(--color-bg); }
+
+  .bg-indigo-50 { background-color: var(--color-primary-tint); }
+  .bg-indigo-100 { background-color: var(--color-primary-tint-strong); }
+  .bg-indigo-500 { background-color: var(--color-primary-500); }
+  .bg-indigo-600 { background-color: var(--color-primary); }
+  .bg-indigo-700 { background-color: var(--color-primary-hover); }
+
+  .bg-red-50 { background-color: var(--color-danger-bg); }
+  .bg-red-100 { background-color: var(--color-danger-bg); }
+  .bg-red-500 { background-color: var(--color-danger); }
+  .bg-red-600 { background-color: var(--color-danger); }
+  .bg-red-700 { background-color: var(--color-danger); }
+
+  .bg-green-50 { background-color: var(--color-success-bg); }
+  .bg-green-100 { background-color: var(--color-success-bg); }
+
+  .bg-orange-50 { background-color: var(--color-warning-bg); }
+
+  .bg-blue-50 { background-color: var(--color-info-bg); }
+  .bg-blue-100 { background-color: var(--color-info-bg); }
+  .bg-blue-500 { background-color: var(--color-info); }
+  .bg-blue-600 { background-color: var(--color-info); }
+
+  .bg-yellow-50 { background-color: var(--color-warning-bg); }
+  .bg-yellow-100 { background-color: var(--color-warning-bg); }
+
+  .bg-purple-50 { background-color: var(--color-purple-bg); }
+  .bg-purple-100 { background-color: var(--color-purple-bg); }
+  .bg-purple-500 { background-color: var(--color-purple); }
+  .bg-purple-600 { background-color: var(--color-purple); }
+
+  .bg-emerald-100 { background-color: var(--color-success-bg); }
+  .bg-emerald-600 { background-color: var(--color-success); }
+  .bg-emerald-700 { background-color: var(--color-success); }
+
+  /* Additional bubble-color remaps for group-chat BUBBLE_COLORS */
+  .bg-pink-100 { background-color: var(--color-danger-bg); }
+  .bg-teal-100 { background-color: var(--color-success-bg); }
+  .bg-orange-100 { background-color: var(--color-warning-bg); }
+
+  /* --- Hover backgrounds --- */
+  .hover\:bg-gray-50:hover { background-color: var(--color-hover-bg); }
+  .hover\:bg-gray-100:hover { background-color: var(--color-hover-bg); }
+  .hover\:bg-gray-200:hover { background-color: var(--color-surface); }
+  .hover\:bg-gray-300:hover { background-color: var(--color-surface-hover); }
+  .hover\:bg-gray-800:hover { background-color: var(--color-sidebar-hover); }
+  .hover\:bg-indigo-50:hover { background-color: var(--color-primary-tint); }
+  .hover\:bg-indigo-700:hover { background-color: var(--color-primary-hover); }
+  .hover\:bg-red-50:hover { background-color: var(--color-danger-bg); }
+  .hover\:bg-red-600:hover { background-color: var(--color-danger); }
+  .hover\:bg-red-700:hover { background-color: var(--color-danger); }
+  .hover\:text-red-700:hover { color: var(--color-danger); }
+  .hover\:bg-purple-700:hover { background-color: var(--color-purple); }
+  .hover\:bg-emerald-700:hover { background-color: var(--color-success); }
+
+  /* --- Text colors --- */
+  .text-white { color: var(--color-text); }
+  .text-gray-200 { color: var(--color-text); }
+  .text-gray-300 { color: var(--color-text-muted); }
+  .text-gray-400 { color: var(--color-text-muted); }
+  .text-gray-500 { color: var(--color-text-faint); }
+  .text-gray-600 { color: var(--color-text-faint); }
+  .text-gray-700 { color: var(--color-text); }
+  .text-gray-800 { color: var(--color-text); }
+  .text-gray-900 { color: var(--color-text); }
+  .text-black { color: var(--color-text); }
+
+  .text-indigo-600 { color: var(--color-primary); }
+  .text-indigo-700 { color: var(--color-primary-hover); }
+  .text-indigo-800 { color: var(--color-primary); }
+
+  .text-red-400 { color: var(--color-danger); }
+  .text-red-500 { color: var(--color-danger); }
+  .text-red-600 { color: var(--color-danger); }
+  .text-red-700 { color: var(--color-danger); }
+
+  .text-purple-300 { color: var(--color-purple); }
+
+  .text-green-600 { color: var(--color-success); }
+  .text-green-700 { color: var(--color-success); }
+
+  .text-orange-600 { color: var(--color-warning-text); }
+
+  .text-blue-400 { color: var(--color-info); }
+  .text-blue-600 { color: var(--color-info); }
+  .text-blue-700 { color: var(--color-info); }
+  .text-blue-800 { color: var(--color-info); }
+  .text-blue-900 { color: var(--color-info); }
+
+  .text-yellow-600 { color: var(--color-warning-text); }
+  .text-yellow-700 { color: var(--color-warning-text); }
+  .text-yellow-800 { color: var(--color-warning-text); }
+
+  .text-purple-700 { color: var(--color-purple); }
+  .text-purple-800 { color: var(--color-purple); }
+
+  .text-emerald-700 { color: var(--color-success); }
+
+  /* Additional bubble text-color remaps */
+  .text-green-800 { color: var(--color-success); }
+  .text-orange-800 { color: var(--color-warning-text); }
+  .text-pink-800 { color: var(--color-danger); }
+  .text-teal-800 { color: var(--color-success); }
+  .text-indigo-800 { color: var(--color-primary); }
+
+  /* --- Border colors --- */
+  .border-gray-200 { border-color: var(--color-border); }
+  .border-gray-300 { border-color: var(--color-border-strong); }
+  .border-gray-400 { border-color: var(--color-border-strong); }
+  .border-indigo-200 { border-color: var(--color-primary-border); }
+  .border-indigo-400 { border-color: var(--color-primary); }
+  .border-indigo-500 { border-color: var(--color-primary-500); }
+  .border-red-200 { border-color: var(--color-danger-border); }
+  .border-blue-300 { border-color: var(--color-info-border); }
+  .border-purple-300 { border-color: var(--color-purple-border); }
+  .border-yellow-300 { border-color: var(--color-primary-border); }
+
+  /* Additional bubble border-color remaps */
+  .border-green-300 { border-color: var(--color-success-border); }
+  .border-orange-300 { border-color: var(--color-primary-border); }
+  .border-pink-300 { border-color: var(--color-danger-border); }
+  .border-teal-300 { border-color: var(--color-success-border); }
+  .border-indigo-300 { border-color: var(--color-primary-border); }
+
+  /* --- Divide colors --- */
+  .divide-gray-200 > * + * { border-color: var(--color-border); }
+  .divide-gray-100 > * + * { border-color: var(--color-border-subtle); }
+
+  /* --- Ring --- */
+  .ring-indigo-500 { --tw-ring-color: var(--color-primary); }
+
+  /* --- Focus --- */
+  .focus\:border-indigo-500:focus { border-color: var(--color-primary-500); }
+  .focus\:ring-indigo-500:focus { --tw-ring-color: var(--color-primary); }
+
+  /* --- Overlay --- */
+  .bg-black\/50 { background-color: var(--color-overlay); }
+  .bg-black\/60 { background-color: rgba(0,0,0,0.6); }
+  .bg-black\/70 { background-color: var(--color-overlay); }
+  .bg-black\/40 { background-color: rgba(0,0,0,0.4); }
+
+  /* --- Shadow remapping for dark theme --- */
+  .shadow { box-shadow: var(--shadow-sm); }
+  .shadow-sm { box-shadow: var(--shadow-xs); }
+  .shadow-md { box-shadow: var(--shadow-sm); }
+  .shadow-lg { box-shadow: var(--shadow-md); }
+  .shadow-xl { box-shadow: var(--shadow-lg); }
+  .shadow-2xl { box-shadow: var(--shadow-xl); }
+
+  /* --- Surface card base style --- */
+  .card-surface {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-sm), var(--surface-highlight);
+  }
+}
+
+/* ===========================================================================
+ * Custom scrollbar — thin, dark, refined
+ * =========================================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #252525;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #353535;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #252525 transparent;
+}
+
+/* ===========================================================================
+ * Performance hints
+ * =========================================================================== */
+[class*="overflow-y-auto"], [class*="overflow-x-auto"] {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+svg circle[style*="transition"] {
+  will-change: stroke-dasharray;
+}
+
+::selection {
+  background: rgba(201,168,108,0.25);
+  color: #E8E8E8;
+}
+
+/* ===========================================================================
+ * Noir Atelier Animation System
+ * =========================================================================== */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translate3d(0, -8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-content-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.97); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92) translateZ(0); }
+  to { opacity: 1; transform: scale(1) translateZ(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,108,0); }
+  50% { box-shadow: 0 0 12px 2px rgba(201,168,108,0.12); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes tavernos-gc-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes tavernos-gc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,108,0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(201,168,108,0); }
+}
+
+@keyframes tavernos-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* --- Animation utility classes --- */
+.animate-fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-modal-backdrop {
+  animation: modal-backdrop-in var(--duration-normal) ease-out forwards;
+}
+
+.animate-modal-content {
+  animation: modal-content-in 300ms var(--ease-out) forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in var(--duration-fast) var(--ease-out) forwards;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* --- Interactive micro-interactions --- */
+.btn-press {
+  transition: transform var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) ease,
+              border-color var(--duration-fast) ease,
+              box-shadow var(--duration-fast) ease,
+              color var(--duration-fast) ease,
+              opacity var(--duration-fast) ease;
+  will-change: transform;
+}
+.btn-press:active {
+  transform: scale(0.96) translateZ(0);
+}
+
+.card-lift {
+  transition: transform var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) ease,
+              box-shadow var(--duration-normal) ease,
+              background-color var(--duration-normal) ease;
+  will-change: transform;
+  transform: translateZ(0);
+}
+.card-lift:hover {
+  transform: translateY(-2px) translateZ(0);
+  box-shadow: var(--shadow-md), 0 0 20px rgba(201,168,108,0.06);
+}
+
+.popover-enter {
+  animation: fade-in-down var(--duration-fast) var(--ease-out) forwards;
+  transform-origin: top center;
+}
+
+.popover-enter-up {
+  animation: fade-in-up var(--duration-fast) var(--ease-out) forwards;
+  transform-origin: bottom center;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Form controls transition */
+input, select, textarea, button {
+  transition: border-color var(--duration-fast) ease,
+              box-shadow var(--duration-fast) ease,
+              background-color var(--duration-fast) ease,
+              color var(--duration-fast) ease;
+}
+
+/* Stagger children entrance */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-in-up var(--duration-slow) var(--ease-out) forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.4s; }
+.stagger-children > *:nth-child(n+9) { animation-delay: 0.45s; }
+
+/* Tab indicator animation */
+.tab-indicator {
+  transition: transform var(--duration-normal) var(--ease-out),
+              width var(--duration-normal) var(--ease-out);
+}
+
+/* Launcher exit transitions */
+@keyframes titleZoomFade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+    filter: blur(8px);
+  }
+  25% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(2.2);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.5);
+    filter: blur(12px);
+  }
+}
+
+@keyframes exitBgIn {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+/* GC animations (from group chat SessionView) */
+@keyframes tavernos-gc-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes tavernos-gc-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

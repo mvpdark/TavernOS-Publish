@@ -1,0 +1,112 @@
+{
+  "name": "tavernos",
+  "version": "0.3.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "description": "AI-assisted creative writing platform fusing character cards, world info, and multi-agent pipelines",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "electron:dev": "electron electron/main.cjs",
+    "electron:build:frontend": "cd packages/studio && npx vite build",
+    "electron:build:server": "node electron/build-server.cjs",
+    "electron:build:icon": "node electron/generate-icon.cjs",
+    "electron:build:dir": "electron-builder --dir --win --x64 --publish never",
+    "electron:build:nsis": "node electron/build-installer.cjs",
+    "electron:build:installer": "npm run electron:build:frontend && npm run electron:build:server && npm run electron:build:dir && npm run electron:build:nsis",
+    "electron:start": "electron electron/main.cjs",
+    "obfuscate": "node electron/obfuscate-build.cjs"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
+  "build": {
+    "appId": "com.tavernos.studio",
+    "productName": "TavernOS",
+    "copyright": "Copyright © 2026 TavernOS",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/build"
+    },
+    "asar": true,
+    "npmRebuild": false,
+    "afterPack": "electron/after-pack.cjs",
+    "files": [
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "electron/build/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "packages/studio/dist",
+        "to": "dist"
+      },
+      {
+        "from": "dist-server",
+        "to": "server"
+      },
+      {
+        "from": "electron/build/node",
+        "to": "node"
+      },
+      {
+        "from": "electron/onboarding.html",
+        "to": "onboarding.html"
+      },
+      {
+        "from": "electron/server-startup.cjs",
+        "to": "server-startup.cjs"
+      }
+    ],
+    "win": {
+      "icon": "electron/build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TavernOS-Setup-${version}-x64.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/build/icon.ico",
+      "uninstallerIcon": "electron/build/icon.ico",
+      "installerHeaderIcon": "electron/build/icon.ico",
+      "installerSidebar": "electron/build/installer-sidebar.bmp",
+      "installerHeader": "electron/build/installer-header.bmp",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TavernOS",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "devDependencies": {
+    "@electron/fuses": "^1.8.0",
+    "@swc/cli": "^0.8.1",
+    "@swc/core": "^1.15.43",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "javascript-obfuscator": "^5.4.3",
+    "sharp": "^0.35.2",
+    "tsx": "^4.22.5"
+  }
+}

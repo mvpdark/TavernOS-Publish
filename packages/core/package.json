@@ -1,0 +1,47 @@
+{
+  "name": "@tavernos/core",
+  "version": "0.3.0",
+  "description": "TavernOS core engine: multi-agent pipeline, state management, character cards, world info, LLM provider abstraction",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./dist/*": {
+      "import": "./dist/*"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/__tests__"
+  ],
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=20.3.0"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/copy-prompts.mjs",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "js-yaml": "^4.3.0",
+    "png-chunk-text": "^1.0.0",
+    "png-chunks-extract": "^1.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^26.0.1",
+    "@types/png-chunk-text": "^1.0.2",
+    "@types/png-chunks-extract": "^1.0.2",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@tavernos/cli",
+  "version": "0.1.0",
+  "description": "TavernOS CLI - command line interface for creative writing",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "tavernos": "dist/index.js"
+  },
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tavernos/core": "*",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}
