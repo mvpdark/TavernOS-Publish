@@ -14,21 +14,27 @@ module.exports = async function (context) {
 
   console.log("[after-pack] Starting cleanup...");
 
-  // 0. Obfuscate frontend JS assets (TEMPORARILY DISABLED for debugging)
-  // try {
-  //   const { obfuscateFrontendInApp } = require("./obfuscate-build.cjs");
-  //   console.log("[after-pack] Obfuscating frontend assets in app output...");
-  //   const result = obfuscateFrontendInApp(context.appOutDir);
-  //   if (result.failed > 0) {
-  //     console.warn(`[after-pack] WARNING: ${result.failed} frontend file(s) failed to obfuscate`);
-  //   } else {
-  //     console.log(`[after-pack] Frontend obfuscation complete: ${result.success} file(s)`);
-  //   }
-  // } catch (err) {
-  //   console.warn("[after-pack] WARNING: Frontend obfuscation step failed:", err.message);
-  //   console.warn("[after-pack] Continuing with unobfuscated frontend assets.");
-  // }
-  console.log("[after-pack] Frontend obfuscation disabled (debug mode)");
+  // 0. Obfuscate frontend JS assets and server bundle in the packed app
+  try {
+    const { obfuscateFrontendInApp, obfuscateServerInApp } = require("./obfuscate-build.cjs");
+    console.log("[after-pack] Obfuscating frontend assets in app output...");
+    const feResult = obfuscateFrontendInApp(context.appOutDir);
+    if (feResult.failed > 0) {
+      console.warn(`[after-pack] WARNING: ${feResult.failed} frontend file(s) failed to obfuscate`);
+    } else {
+      console.log(`[after-pack] Frontend obfuscation complete: ${feResult.success} file(s)`);
+    }
+    console.log("[after-pack] Obfuscating server bundle in app output...");
+    const svResult = obfuscateServerInApp(context.appOutDir);
+    if (svResult.failed > 0) {
+      console.warn(`[after-pack] WARNING: Server bundle obfuscation reported failures`);
+    } else {
+      console.log(`[after-pack] Server bundle obfuscation complete`);
+    }
+  } catch (err) {
+    console.warn("[after-pack] WARNING: Obfuscation step failed:", err.message);
+    console.warn("[after-pack] Continuing with unobfuscated assets.");
+  }
 
   // 1. Always remove and re-copy runtime-modules to ensure real files
   const runtimeModulesDir = path.join(resourcesDir, "runtime-modules");

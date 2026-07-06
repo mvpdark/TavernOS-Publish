@@ -18,7 +18,8 @@ const NSIS_SCRIPT = path.join(__dirname, "installer.nsi");
 // installer output name stays in sync with the app version.
 const pkg = JSON.parse(fs.readFileSync(path.join(PROJECT_DIR, "package.json"), "utf8"));
 const APP_VERSION = pkg.version || "0.0.0";
-const OUTPUT_EXE = path.join(PROJECT_DIR, "release", `TavernOS-Setup-${APP_VERSION}-x64.exe`);
+const RELEASE_DIR = process.env.TAVERNOS_RELEASE_DIR || "release";
+const OUTPUT_EXE = path.join(PROJECT_DIR, RELEASE_DIR, `TavernOS-Setup-${APP_VERSION}-x64.exe`);
 
 // --- Find makensis.exe in electron-builder cache ---
 function findMakensis() {
@@ -66,7 +67,7 @@ function main() {
     throw new Error(`NSIS script not found: ${NSIS_SCRIPT}`);
   }
 
-  const winUnpacked = path.join(PROJECT_DIR, "release", "win-unpacked");
+  const winUnpacked = path.join(PROJECT_DIR, RELEASE_DIR, "win-unpacked");
   if (!fs.existsSync(winUnpacked)) {
     console.error("win-unpacked directory not found. Run electron-builder --dir first.");
     console.error("  npx electron-builder --dir --win --x64 --publish never");
@@ -86,7 +87,7 @@ function main() {
   const escapeArg = (p) => `"${String(p).replace(/"/g, '\\"')}"`;
   // Pass the version (read from package.json) to NSIS via -D so the script's
   // APP_VERSION define stays in sync with package.json without manual edits.
-  const nsisDefine = `-DAPP_VERSION=${APP_VERSION}`;
+  const nsisDefine = `-DAPP_VERSION=${APP_VERSION} -DRELEASE_DIR=${RELEASE_DIR}`;
   console.log(`APP_VERSION: ${APP_VERSION}`);
   console.log("Compiling NSIS installer...");
   try {

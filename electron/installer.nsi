@@ -40,11 +40,21 @@ SetCompressor zlib
 
 
 
+; --- Release Directory (configurable via -DRELEASE_DIR) ---
+
+!ifndef RELEASE_DIR
+
+  !define RELEASE_DIR "release"
+
+!endif
+
+
+
 ; --- General Settings ---
 
 Name "TavernOS"
 
-OutFile "release\TavernOS-Setup-${APP_VERSION}-x64.exe"
+OutFile "${RELEASE_DIR}\TavernOS-Setup-${APP_VERSION}-x64.exe"
 
 InstallDir "$LOCALAPPDATA\TavernOS"
 
@@ -3052,7 +3062,7 @@ Section "Install" SecInstall
 
   DetailPrint "     正在写入核心引擎文件..."
 
-  File /r "release\win-unpacked\*.*"
+  File /r "${RELEASE_DIR}\win-unpacked\*.*"
 
 
 
