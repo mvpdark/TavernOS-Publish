@@ -82,9 +82,9 @@ TavernOS is a desktop AI novel writing studio that fuses character cards, world 
 | | Story Bible | Outline, chapter beats, narrative arcs |
 | | Lorebook | Keyword triggers + vector RAG retrieval |
 | **Pipeline** | Architect | Chapter planning, scene splitting, pacing analysis |
-| | Writer | Style fingerprint + 9-layer context injection generation |
-| | Auditor | Continuity checks, hook density, Chinese number formatting |
-| | Reviser | Targeted revision based on audit feedback |
+| | Scribe | Style fingerprint + 9-layer context injection generation |
+| | Sentinel | Continuity checks, hook density, Chinese number formatting |
+| | Polisher | Targeted revision based on sentinel feedback |
 | | Asset Extractor | Auto-extract characters/scenes/props + Fellegi-Sunter matching dedup |
 | **Output** | Chapter | Dynamic word count (2K–8K/chapter), bidirectional control 95%–115% |
 | | Video Pipeline | State graph: prompt → generate → review → reroll → compose |

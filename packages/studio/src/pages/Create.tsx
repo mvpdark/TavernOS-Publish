@@ -43,7 +43,7 @@ const AGENT_LABELS: Record<string, string> = {
   auditor: "Auditor",
   reviser: "Reviser",
   consolidator: "Consolidator",
-  planner: "Planner",
+  conductor: "Conductor",
   architect: "Architect",
 };
 
@@ -406,7 +406,10 @@ export default function Create(): JSX.Element {
             assistantText += frame.content;
             setMessages((prev) => {
               const copy = [...prev];
+              // Preserve the placeholder message's id to maintain React
+              // key stability across streaming updates.
               copy[copy.length - 1] = {
+                ...copy[copy.length - 1],
                 role: "assistant",
                 content: assistantText,
               };
@@ -420,6 +423,7 @@ export default function Create(): JSX.Element {
             setMessages((prev) => {
               const copy = [...prev];
               copy[copy.length - 1] = {
+                ...copy[copy.length - 1],
                 role: "assistant",
                 content: assistantText + (savedInfo ? `\n\n✅ ${savedInfo}` : ""),
                 quickReplies: frame.quickReplies ?? [],

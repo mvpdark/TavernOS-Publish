@@ -21,7 +21,7 @@ import type { JSX } from "react";
  *  configured provider's best model is used as the recommendation. */
 const AGENTS = [
   { id: "architect", name: "大纲规划", desc: "剧情架构与伏笔设计", priority: ["anthropic", "yunwu", "openai", "grok", "agnes", "deepseek"] },
-  { id: "planner", name: "上下文筛选", desc: "筛选相关历史信息", priority: ["deepseek", "openai", "grok", "yunwu", "anthropic", "agnes"] },
+  { id: "conductor", name: "上下文筛选", desc: "筛选相关历史信息", priority: ["deepseek", "openai", "grok", "yunwu", "anthropic", "agnes"] },
   { id: "writerSkeleton", name: "写作·骨架阶段", desc: "两阶段骨架（长上下文模型，如 Kimi）", priority: ["moonshot", "google", "grok", "agnes", "yunwu", "openai"] },
   { id: "writerFlesh", name: "写作·血肉阶段", desc: "两阶段血肉（文学模型，如 Claude）", priority: ["anthropic", "yunwu", "openai", "grok", "agnes", "deepseek"] },
   { id: "writer", name: "写作·单阶段兜底", desc: "未配置骨架时使用", priority: ["anthropic", "yunwu", "openai", "grok", "agnes", "deepseek"] },
@@ -807,7 +807,7 @@ export default function Settings(): JSX.Element {
       {/* Music generation configuration */}
       <MusicConfigSection />
 
-      {/* Plus module (daily silent character generation via LLM + image proxy + WebDAV) */}
+      {/* Plus module (daily silent character generation via LLM + Midjourney + WebDAV) */}
       <PlusConfigSection />
       </div>
     </div>
