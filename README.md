@@ -1,20 +1,27 @@
 <p align="center">
+  <a href="README.md">简体中文</a> · 
+  <a href="README.en.md">English</a> · 
+  <a href="README.ja.md">日本語</a> · 
+  <a href="README.ko.md">한국어</a>
+</p>
+
+<p align="center">
   <img src="docs/assets/banner-ai.png" alt="TavernOS — Ink Circuit" width="100%"/>
 </p>
 
-<h1 align="center" style="color: #D4AF37;">TavernOS</h1>
+<h1 align="center">TavernOS</h1>
 
 <p align="center">
-  <strong style="color: #D4AF37;">墨韵万象 · 智绘奇境</strong>
+  <strong>墨韵万象 · 智绘奇境</strong>
 </p>
 
 <p align="center">
-  <em>AI Novel Writing Studio — Multi-Agent Narrative Engine</em>
+  <em>AI 小说创作工坊 — 多智能体叙事引擎</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/mvpdark/TavernOS-Publish/releases">
-    <img src="https://img.shields.io/github/v/release/mvpdark/TavernOS-Publish?style=flat-square&color=D4AF37&label=%E7%89%88%E6%9C%AC" alt="Release"/>
+    <img src="https://img.shields.io/github/v/release/mvpdark/TavernOS-Publish?style=flat-square&color=D4AF37&label=版本" alt="Release"/>
   </a>
   <a href="https://github.com/mvpdark/TavernOS-Publish/stargazers">
     <img src="https://img.shields.io/github/stars/mvpdark/TavernOS-Publish?style=flat-square&color=D4AF37" alt="Stars"/>
@@ -42,48 +49,50 @@
   <img src="https://img.shields.io/badge/pnpm-11-F69220?style=flat-square&logo=pnpm&logoColor=white"/>
 </p>
 
-<br/>
+---
 
 > 「以墨为笔，以码为砚。九段 Agent 如九龙治水，共绘一卷。」
 
-TavernOS is a desktop AI novel writing studio that fuses character cards, world-building, and a multi-agent narrative pipeline into a single creative environment. It features a 9-stage writing pipeline, a 13-module narrative engine, state-graph video generation, and a character interaction system — all wrapped in a cross-platform Electron desktop app.
+TavernOS 是一款桌面端 AI 小说创作工坊，将角色卡、世界观构建和多智能体叙事流水线融合在统一的创作环境中。它包含 9 段写作流水线、13 模块叙事引擎、状态图视频生成和角色对话系统，全部封装在跨平台 Electron 桌面应用中。
 
-<br/>
+## 目录
+
+- [系统架构](#系统架构)
+- [核心功能](#核心功能)
+- [快速开始](#快速开始)
+- [技术栈](#技术栈)
+- [仓库结构](#仓库结构)
+- [下载](#下载)
+- [许可证](#许可证)
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 系统架构 · Architecture
+## 系统架构
 
 <p align="center">
   <img src="docs/assets/architecture-ai.png" alt="System Architecture — Ink Circuit" width="95%"/>
 </p>
 
-<br/>
-
-| Layer | Stage | Description |
+| 层级 | 阶段 | 说明 |
 |:---|:---|:---|
-| **Input** · 输入 | Character Cards · 角色卡 | Persona definitions with bonds, moods, motives, inner voice |
-| | World Building · 世界观 | Setting rules, geography, faction dynamics |
-| | Story Bible · 故事圣经 | Plot outline, chapter beats, narrative arc |
-| | Lorebook · 知识库 | Keyword-triggered world info with vector RAG retrieval |
-| **Pipeline** · 流水线 | Architect · 架构师 | Chapter planning, scene breakdown, pacing analysis |
-| | Writer · 执笔 | Content generation with style fingerprint and 9-layer context |
-| | Auditor · 审核 | Continuity check, hook density, Chinese number formatting |
-| | Reviser · 修订 | Targeted revision based on auditor feedback |
-| | Asset Extractor · 资产提取 | Auto-extract characters/scenes/props with Fellegi-Sunter matching |
-| **Output** · 输出 | Chapter · 章节 | Polished prose with dynamic word count (2K–8K per chapter) |
-| | Video Pipeline · 视频流水线 | State graph: prompt → generate → review → reroll → compose |
-| | Chat Engine · 对话引擎 | Character roleplay with personality models |
-| | Export · 导出 | Multiple formats with style preservation |
-
-<br/>
+| **输入** | 角色卡 Character Cards | 角色定义：羁绊、情绪、动机、内心独白 |
+| | 世界观 World Building | 设定规则、地理、阵营动态 |
+| | 故事圣经 Story Bible | 大纲、章节节拍、叙事弧线 |
+| | 知识库 Lorebook | 关键词触发 + 向量 RAG 检索 |
+| **流水线** | 架构师 Architect | 章节规划、场景拆分、节奏分析 |
+| | 执笔 Writer | 风格指纹 + 九层上下文注入生成 |
+| | 审核 Auditor | 连续性检查、钩子密度、中文数字格式 |
+| | 修订 Reviser | 基于审核反馈的定向修订 |
+| | 资产提取 Asset Extractor | 自动提取角色/场景/道具 + Fellegi-Sunter 匹配去重 |
+| **输出** | 章节 Chapter | 动态字数（2K–8K/章），双向控制 95%–115% |
+| | 视频流水线 Video Pipeline | 状态图：提示词 → 生成 → 审核 → 重滚 → 合成 |
+| | 对话引擎 Chat Engine | 角色扮演 + 人格模型 + 关系追踪 |
+| | 导出 Export | 多格式导出 + 风格保持 |
 
 <details>
-<summary>📖 Video Pipeline State Graph</summary>
-
-<br/>
+<summary>📖 视频流水线状态图</summary>
 
 ```
 START → prompt_enhance → generate → download → frame_check
@@ -93,43 +102,39 @@ START → prompt_enhance → generate → download → frame_check
                                               post_process  reroll   fail → END
 ```
 
-- 6 video providers supported (OpenAI, Yunwu, Seedance, etc.)
-- Auto-reroll with LLM-generated improved prompts
-- SSIM frame checking for quality control
-- Character consistency check with face embedding
-- Lip sync integration
+- 支持 6 家视频生成商（OpenAI、云雾、Seedance 等）
+- LLM 自动生成改进提示词 + 重滚
+- SSIM 帧检测质量控制
+- 角色一致性检查（人脸嵌入）
+- 口型同步集成
 
 </details>
 
-<br/>
-
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 核心功能 · Core Features
+## 核心功能
 
-| Module | Description |
+| 模块 | 说明 |
 |:---|:---|
-| **Multi-Agent Writing** · 多智能体写作 | 5-stage pipeline with dedicated YAML prompts and independent error handling per agent |
-| **Character Engine** · 角色引擎 | 7 sub-modules: bond tracker, mood engine, motive stack, inner voice, pace director, epiphany system |
-| **Narrative Context** · 叙事上下文 | 9-layer memory: story bible, book rules, current state, active hooks, narrative context, lorebook, vector RAG, recent chapters, conversation summary |
-| **Asset Extraction** · 资产提取 | Fellegi-Sunter probabilistic matching with 4-layer deduplication defense and auto-normalization |
-| **Video Pipeline** · 视频流水线 | State graph engine with 9 stages, 6 providers, auto-reroll, character consistency, lip sync |
-| **Lorebook Engine** · 知识库引擎 | Keyword-triggered injection with vector RAG (minScore=0.3, topK=3, maxTokens=1500) |
-| **Chat System** · 对话系统 | Character roleplay with personality models, relationship tracking, multi-character group chat |
-| **Style Fingerprint** · 风格指纹 | Linguistic feature extraction for consistent author voice across AI-generated chapters |
-| **Desktop App** · 桌面应用 | Electron 43, NSIS installer, auto-update checking, cross-platform |
-
-<br/>
+| **多智能体写作** | 5 段流水线，每个 Agent 独立 YAML 提示词 + 独立错误处理 |
+| **角色引擎** | 7 子模块：羁绊追踪、情绪引擎、动机栈、内心独白、节奏指导、顿悟系统 |
+| **叙事上下文** | 9 层记忆：故事圣经、规则、当前状态、活跃钩子、叙事上下文、知识库、向量 RAG、近章、对话摘要 |
+| **资产提取** | Fellegi-Sunter 概率匹配 + 4 层去重防御 + 自动归一化 |
+| **视频流水线** | 状态图引擎，9 阶段，6 家提供商，自动重滚，角色一致性，口型同步 |
+| **知识库引擎** | 关键词触发注入 + 向量 RAG（minScore=0.3, topK=3, maxTokens=1500） |
+| **对话系统** | 角色扮演 + 人格模型 + 关系追踪 + 多人群聊 |
+| **风格指纹** | 语言特征提取，确保 AI 生成章节的作者声音一致性 |
+| **桌面应用** | Electron 43，NSIS 安装器，自动更新检查，跨平台 |
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 快速开始 · Quick Start
+## 快速开始
 
-### Install
+### 安装
 
 ```bash
 npm install -g pnpm
@@ -138,11 +143,11 @@ cd TavernOS-Publish
 pnpm install
 ```
 
-### Configure
+### 配置
 
 ```bash
 cp .env.example .env
-# Edit .env with your LLM provider:
+# 编辑 .env 配置 LLM 提供商：
 # TAVERNOS_LLM_PROVIDER=custom
 # TAVERNOS_LLM_BASE_URL=https://api.openai.com/v1
 # TAVERNOS_LLM_API_KEY=sk-...
@@ -150,44 +155,40 @@ cp .env.example .env
 ```
 
 <details>
-<summary>🔧 Supported LLM Providers</summary>
+<summary>🔧 支持的 LLM 提供商</summary>
 
-<br/>
-
-| Provider | Base URL | Note |
+| 提供商 | Base URL | 说明 |
 |:---|:---|:---|
 | OpenAI | `https://api.openai.com/v1` | GPT-4o, GPT-4o-mini |
-| Moonshot / Kimi | `https://api.moonshot.cn/v1` | moonshot-v1 series |
-| Zhipu / GLM | `https://open.bigmodel.cn/api/paas/v4` | glm-4 series |
+| 月之暗面 / Kimi | `https://api.moonshot.cn/v1` | moonshot-v1 系列 |
+| 智谱 / GLM | `https://open.bigmodel.cn/api/paas/v4` | glm-4 系列 |
 | DeepSeek | `https://api.deepseek.com/v1` | deepseek-chat, deepseek-coder |
-| Yunwu | `https://api.yunwu.ai/v1` | Multi-model proxy |
-| Grok | OAuth + PKCE | xAI with auto-refresh |
-| OpenRouter | `https://openrouter.ai/api/v1` | 100+ models |
-| Ollama | `http://localhost:11434/v1` | Local models |
+| 云雾 Yunwu | `https://api.yunwu.ai/v1` | 多模型代理 |
+| Grok | OAuth + PKCE | xAI 自动刷新令牌 |
+| OpenRouter | `https://openrouter.ai/api/v1` | 100+ 模型 |
+| Ollama | `http://localhost:11434/v1` | 本地模型 |
 
 </details>
 
-### Run
+### 运行
 
 ```bash
-pnpm dev              # Development mode
-pnpm electron:dev     # Electron desktop app
-pnpm build            # Build everything
+pnpm dev              # 开发模式
+pnpm electron:dev     # Electron 桌面应用
+pnpm build            # 全量构建
 ```
 
 ### Docker
 
 ```bash
-docker-compose up -d  # Or: docker build -t tavernos .
+docker-compose up -d  # 或：docker build -t tavernos .
 ```
-
-<br/>
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 技术栈 · Tech Stack
+## 技术栈
 
 <p align="center">
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg" height="36" alt="TypeScript"/>
@@ -207,74 +208,64 @@ docker-compose up -d  # Or: docker build -t tavernos .
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/pnpm/pnpm-original.svg" height="36" alt="pnpm"/>
 </p>
 
-<br/>
-
-| Layer | Technology |
+| 层级 | 技术 |
 |:---|:---|
-| **Language** | TypeScript (ESM, Zod validation) |
-| **Frontend** | React 19, Tailwind CSS, Vite 7 |
-| **Desktop** | Electron 43, NSIS installer |
-| **Backend** | Hono (server), esbuild (bundler) |
-| **Database** | better-sqlite3 |
-| **AI/ML** | Multi-provider LLM abstraction, Vector RAG |
-| **Video** | FFmpeg, StateGraph pipeline, 6 providers |
-| **Build** | pnpm workspaces, RC4 obfuscation for core IP |
-
-<br/>
+| **语言** | TypeScript（ESM, Zod 校验） |
+| **前端** | React 19, Tailwind CSS, Vite 7 |
+| **桌面** | Electron 43, NSIS 安装器 |
+| **后端** | Hono（服务端）, esbuild（打包） |
+| **数据库** | better-sqlite3 |
+| **AI/ML** | 多提供商 LLM 抽象层, 向量 RAG |
+| **视频** | FFmpeg, StateGraph 流水线, 6 家提供商 |
+| **构建** | pnpm workspaces, RC4 混淆保护核心 IP |
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 仓库结构 · Repository
+## 仓库结构
 
 > [!IMPORTANT]
-> This is the **public distribution** of TavernOS. The core writing engine is distributed in compiled form to protect proprietary IP.
+> 本仓库是 TavernOS 的**公开发布版**。核心写作引擎以编译形式分发，以保护专有知识产权。
 
-| Component | Visibility | Path |
+| 组件 | 可见性 | 路径 |
 |:---|:---|:---|
-| Frontend UI (React/Tailwind) | **Full source** | `packages/studio/` |
-| Electron shell | **Full source** | `electron/` |
-| Infrastructure (LLM, storage, types) | **Full source** | `packages/core/src/` |
-| CLI tools | **Full source** | `packages/cli/` |
-| Core writing engine | **Compiled JS** | `packages/core/dist/` |
-| Server (API routes, RAG) | **Compiled JS** | `dist-server/index.js` |
-| Docker configs | **Full source** | `Dockerfile`, `docker-compose.yml` |
-
-<br/>
+| 前端 UI（React/Tailwind） | **完整源码** | `packages/studio/` |
+| Electron 外壳 | **完整源码** | `electron/` |
+| 基础设施（LLM、存储、类型） | **完整源码** | `packages/core/src/` |
+| CLI 工具 | **完整源码** | `packages/cli/` |
+| 核心写作引擎 | **编译 JS** | `packages/core/dist/` |
+| 服务端（API 路由、RAG） | **编译 JS** | `dist-server/index.js` |
+| Docker 配置 | **完整源码** | `Dockerfile`, `docker-compose.yml` |
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 下载 · Download
+## 下载
 
 <p align="center">
   <a href="https://github.com/mvpdark/TavernOS-Publish/releases">
-    <img src="https://img.shields.io/badge/Windows-Download-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
+    <img src="https://img.shields.io/badge/Windows-下载-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
   </a>
 </p>
 
-> Download `TavernOS-Setup-x.x.x-x64.exe` from [Releases](https://github.com/mvpdark/TavernOS-Publish/releases). Auto-update checking is built in.
-
-<br/>
+> 从 [Releases](https://github.com/mvpdark/TavernOS-Publish/releases) 下载 `TavernOS-Setup-x.x.x-x64.exe`，内置自动更新检查。
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>
 </p>
 
-## 许可证 · License
+## 许可证
 
 Copyright © 2026 mvpdark. All rights reserved.
 
-| Component | License |
+| 组件 | 许可证 |
 |:---|:---|
-| Frontend, Electron, Infrastructure | **GPL v3** |
-| Core writing engine | **Proprietary** |
+| 前端、Electron、基础设施 | **GPL v3** |
+| 核心写作引擎 | **专有** |
 
-See [LICENSE](LICENSE) for details.
-
-<br/>
+详见 [LICENSE](LICENSE)。
 
 <p align="center">
   <img src="docs/assets/seal-ai.png" alt="TavernOS Seal" width="100"/>
