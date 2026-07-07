@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "description": "AI-assisted creative writing platform fusing character cards, world info, and multi-agent pipelines",
-  "license": "AGPL-3.0-only",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -33,7 +33,7 @@
   "build": {
     "appId": "com.tavernos.studio",
     "productName": "TavernOS",
-    "copyright": "Copyright © 2026 TavernOS",
+    "copyright": "Copyright © 2026 mvpdark",
     "directories": {
       "output": "release",
       "buildResources": "electron/build"

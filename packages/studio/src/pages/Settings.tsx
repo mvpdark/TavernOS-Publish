@@ -807,7 +807,7 @@ export default function Settings(): JSX.Element {
       {/* Music generation configuration */}
       <MusicConfigSection />
 
-      {/* Plus module (daily silent character generation via LLM + Midjourney + WebDAV) */}
+      {/* Plus module (daily silent character generation via LLM + image proxy + WebDAV) */}
       <PlusConfigSection />
       </div>
     </div>

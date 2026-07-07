@@ -1,6 +1,58 @@
-GNU General Public License v3.0
+GNU General Public License v3.0 (GPL-3.0-only)
 
-This project's UI, Electron shell, and infrastructure components are licensed under GPL v3.
-The core writing engine (packages/core/dist/) is proprietary and distributed in compiled form only.
+Copyright © 2026 mvpdark. All rights reserved.
 
-See https://www.gnu.org/licenses/gpl-3.0.html for the full GPL v3 license text.
+===============================================================================
+LICENSE OVERVIEW
+===============================================================================
+
+This repository (TavernOS-Publish) contains two categories of code:
+
+1. Open-Source Components — Licensed under GPL v3
+   -----------------------------------------------
+   The following directories are licensed under the GNU General Public
+   License v3.0 (GPL-3.0-only):
+
+   - packages/studio/          (React frontend UI)
+   - packages/studio/src/      (UI source code)
+   - packages/core/src/        (Infrastructure: LLM client, storage, crypto,
+                                types, models, image client, extensions)
+   - packages/cli/             (CLI tools)
+   - electron/                 (Electron desktop shell)
+   - Dockerfile, docker-compose.yml
+
+   These components are free software: you can redistribute them and/or modify
+   them under the terms of the GPL v3 as published by the Free Software
+   Foundation.
+
+2. Proprietary Components — All Rights Reserved
+   ----------------------------------------------
+   The following compiled artifacts are proprietary and distributed in
+   compiled/obfuscated form only:
+
+   - packages/core/dist/       (Core writing engine: pipeline orchestration,
+                                narrative engine, prompt system, asset
+                                extraction, video generation pipeline)
+   - dist-server/index.js      (Server bundle with API routes)
+
+   These components are NOT open source. Unauthorized redistribution,
+   decompilation, or reverse engineering is prohibited.
+
+===============================================================================
+FULL LICENSE TEXT
+===============================================================================
+
+The full text of the GNU General Public License v3.0 is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+A copy is also included in this repository as COPYING file.
+
+===============================================================================
+TRADEMARK NOTICE
+===============================================================================
+
+"TavernOS" and the TavernOS logo are trademarks of mvpdark.
+All other trademarks are the property of their respective owners.
+
+This project is not affiliated with, endorsed by, or sponsored by any
+third-party service provider mentioned in the codebase.

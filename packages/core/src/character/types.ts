@@ -1,4 +1,10 @@
 // packages/core/src/character/types.ts
+//
+// Character card format ("chara_card_v2" / "chara_card_v3") is a community
+// specification originated by the SillyTavern project (https://github.com/SillyTavern/SillyTavern).
+// TavernOS implements read/write compatibility with this format; the spec
+// itself is not affiliated with or endorsed by TavernOS.
+
 import { z } from "zod";
 
 // --- Character voice configuration ---

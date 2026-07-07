@@ -1,4 +1,8 @@
 // packages/core/src/character/card.ts
+//
+// Character card format ("chara_card_v2" / "chara_card_v3") is a community
+// specification originated by the SillyTavern project. See NOTICE for details.
+
 import {
   PersonaCardV1Schema,
   PersonaCardV2Schema,

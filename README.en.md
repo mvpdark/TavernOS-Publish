@@ -72,7 +72,7 @@ TavernOS is a desktop AI novel writing studio that fuses character cards, world 
 ## Architecture
 
 <p align="center">
-  <img src="docs/assets/architecture-ai.png" alt="System Architecture — Ink Circuit" width="95%"/>
+  <img src="docs/assets/architecture-ai.png" alt="TavernOS Interface" width="95%"/>
 </p>
 
 | Layer | Stage | Description |

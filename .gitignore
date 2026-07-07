@@ -14,6 +14,9 @@ node_modules/
 .tavernos/secrets.json
 .tavernos/data/
 
+# Note: packages/core/src/ contains infrastructure source code (LLM client,
+# storage, crypto, types) licensed under GPL v3. It is intentionally public.
+# The proprietary core writing engine is only in packages/core/dist/.
 # Build caches (NOT dist/ - dist/ contains the compiled core engine)
 *.tsbuildinfo
 .vite/

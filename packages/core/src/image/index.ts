@@ -29,7 +29,9 @@ export { isImageStubEnabled, stubImageGeneration } from "./stub.js";
 
 export { createImageGenClient, type ImageGenClient } from "./client.js";
 
-// Midjourney async client (yunwu midjourney-proxy: submit + poll)
+// Async image client (yunwu midjourney-proxy: submit + poll)
+// "Midjourney" is a trademark of Midjourney, Inc. This integration uses a
+// third-party proxy and is not affiliated with or endorsed by Midjourney, Inc.
 export {
   createMJClient,
   type MJConfig,
