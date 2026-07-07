@@ -22,6 +22,13 @@
     "electron:build:dir": "electron-builder --dir --win --x64 --publish never",
     "electron:build:nsis": "node electron/build-installer.cjs",
     "electron:build:installer": "npm run electron:build:frontend && npm run electron:build:server && npm run electron:build:dir && npm run electron:build:nsis",
+    "electron:build:mac:x64": "electron-builder --mac --x64 --publish never",
+    "electron:build:mac:arm64": "electron-builder --mac --arm64 --publish never",
+    "electron:build:mac:universal": "electron-builder --mac --x64 --arm64 --publish never",
+    "electron:build:mac": "npm run electron:build:frontend && npm run electron:build:server && npm run electron:build:mac:x64 && npm run electron:build:mac:arm64",
+    "electron:build:icns": "python -c \"import struct,os,io;from PIL import Image;img=Image.open('electron/build/icon-source.png').convert('RGBA');sizes=[(16,b'icp4'),(32,b'icp5'),(64,b'icp6'),(128,b'ic07'),(256,b'ic08'),(512,b'ic09'),(1024,b'ic10')];chunks=[];[chunks.append(t+struct.pack('>I',len(d)+8)+d) for s,t in sizes for d in [img.resize((s,s),Image.LANCZOS).save(io.BytesIO(),format='PNG').getvalue()] if True];h=b'icns'+struct.pack('>I',8+sum(len(c) for c in chunks));open('electron/build/icon.icns','wb').write(h+b''.join(chunks));print('ICNS generated')\"",
+    "docker:build": "docker build -t tavernos:latest .",
+    "docker:tag": "docker tag tavernos:latest ghcr.io/mvpdark/tavernos:latest",
     "electron:start": "electron electron/main.cjs",
     "obfuscate": "node electron/obfuscate-build.cjs"
   },
@@ -45,6 +52,7 @@
       "electron/main.cjs",
       "electron/preload.cjs",
       "electron/build/icon.ico",
+      "electron/build/icon.icns",
       "package.json"
     ],
     "extraResources": [
@@ -80,6 +88,36 @@
         }
       ],
       "artifactName": "TavernOS-Setup-${version}-x64.exe"
+    },
+    "mac": {
+      "icon": "electron/build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "TavernOS-${version}-${arch}.dmg",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/build/entitlements.mac.plist",
+      "entitlementsInherit": "electron/build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSDocumentsFolderUsageDescription": "TavernOS needs access to Documents to save novel projects.",
+        "NSDownloadsFolderUsageDescription": "TavernOS needs access to Downloads to import/export character cards."
+      }
+    },
+    "dmg": {
+      "title": "TavernOS ${version}",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ],
+      "artifactName": "TavernOS-${version}-${arch}.dmg"
     },
     "nsis": {
       "oneClick": false,

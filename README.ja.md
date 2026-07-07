@@ -248,9 +248,25 @@ docker-compose up -d  # または：docker build -t tavernos .
   <a href="https://github.com/mvpdark/TavernOS-Publish/releases">
     <img src="https://img.shields.io/badge/Windows-ダウンロード-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"/>
   </a>
+  <br/>
+  <a href="https://github.com/mvpdark/TavernOS-Publish/releases">
+    <img src="https://img.shields.io/badge/macOS_(Intel)-ダウンロード-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Intel"/>
+  </a>
+  <a href="https://github.com/mvpdark/TavernOS-Publish/releases">
+    <img src="https://img.shields.io/badge/macOS_(Apple_Silicon)-ダウンロード-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS ARM"/>
+  </a>
+  <br/>
+  <a href="https://github.com/mvpdark/TavernOS-Publish/pkgs/container/tavernos">
+    <img src="https://img.shields.io/badge/Docker-プル-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Pull Docker Image"/>
+  </a>
 </p>
 
-> [Releases](https://github.com/mvpdark/TavernOS-Publish/releases) から `TavernOS-Setup-x.x.x-x64.exe` をダウンロードしてください。自動更新チェックを内蔵しています。
+> [Releases](https://github.com/mvpdark/TavernOS-Publish/releases) からダウンロード：
+> - **Windows**: `TavernOS-Setup-x.x.x-x64.exe`
+> - **macOS (Intel)**: `TavernOS-x.x.x-x64.dmg`
+> - **macOS (Apple Silicon)**: `TavernOS-x.x.x-arm64.dmg`
+>
+> Docker: `docker pull ghcr.io/mvpdark/tavernos:latest`
 
 <p align="center">
   <img src="docs/assets/divider.png" alt="—" width="600"/>

@@ -19,15 +19,17 @@ const runtimeModulesPath = path.join(__dirname, "runtime-modules");
 const serverDir = path.join(__dirname, "server");
 const serverNodeModules = path.join(serverDir, "node_modules");
 
-// Ensure server/node_modules junction exists (created by after-pack, but
-// may be lost during NSIS installation on some systems)
+// Ensure server/node_modules symlink exists (created by after-pack, but
+// may be lost during installation on some systems).
+// On Windows: use "junction" type. On macOS/Linux: use "dir" type.
 if (!fs.existsSync(serverNodeModules) && fs.existsSync(runtimeModulesPath)) {
-  console.log("[server-startup] Creating server/node_modules junction...");
+  console.log("[server-startup] Creating server/node_modules link...");
+  const symlinkType = process.platform === "win32" ? "junction" : "dir";
   try {
-    fs.symlinkSync(runtimeModulesPath, serverNodeModules, "junction");
-    console.log("[server-startup] Created junction successfully");
+    fs.symlinkSync(runtimeModulesPath, serverNodeModules, symlinkType);
+    console.log("[server-startup] Created link successfully");
   } catch (err) {
-    console.error("[server-startup] Junction failed, copying directory...");
+    console.error("[server-startup] Symlink failed, copying directory...");
     try {
       fs.cpSync(runtimeModulesPath, serverNodeModules, { recursive: true });
       console.log("[server-startup] Copied runtime-modules to server/node_modules");

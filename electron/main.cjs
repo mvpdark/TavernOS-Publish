@@ -42,6 +42,14 @@ function logToFile(msg) {
   }
 }
 
+// Resolve icon path based on platform
+function getIconPath() {
+  if (process.platform === "darwin") {
+    return path.join(__dirname, "build", "icon.icns");
+  }
+  return path.join(__dirname, "build", "icon.ico");
+}
+
 // Find an available port starting from BACKEND_PORT
 function findAvailablePort(startPort, maxRetries = 100) {
   return new Promise((resolve, reject) => {
@@ -156,11 +164,15 @@ async function startBackend() {
       }
     );
   } else {
-    // Production: use the bundled standalone Node.js v22 binary (ABI 127)
-    // to run the server via the CommonJS wrapper. The wrapper sets up
-    // require() resolution paths for native modules (better-sqlite3, sharp)
-    // before dynamically importing the ESM server bundle.
-    const nodeExe = path.join(process.resourcesPath, "node", "node.exe");
+    // Production: use the bundled standalone Node.js binary to run the server
+    // via the CommonJS wrapper. The wrapper sets up require() resolution paths
+    // for native modules (better-sqlite3, sharp) before dynamically importing
+    // the ESM server bundle.
+    // On Windows: resources/node/node.exe
+    // On macOS:   resources/node/node
+    const nodeExe = process.platform === "win32"
+      ? path.join(process.resourcesPath, "node", "node.exe")
+      : path.join(process.resourcesPath, "node", "bin", "node");
     logToFile(`Node exe: ${nodeExe}`);
     logToFile(`Node exe exists: ${fs.existsSync(nodeExe)}`);
     backendProcess = spawn(nodeExe, [startupWrapper], {
@@ -208,7 +220,7 @@ function createSplashWindow() {
     resizable: false,
     transparent: false,
     show: true,
-    icon: path.join(__dirname, "build", "icon.ico"),
+    icon: getIconPath(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -242,7 +254,7 @@ function createMainWindow() {
     minHeight: 700,
     show: false,
     backgroundColor: "#0A0A0A",
-    icon: path.join(__dirname, "build", "icon.ico"),
+    icon: getIconPath(),
     title: "TavernOS",
     autoHideMenuBar: true,
     webPreferences: {
@@ -336,7 +348,7 @@ function createOnboardingWindow() {
     frame: false,
     resizable: false,
     show: true,
-    icon: path.join(__dirname, "build", "icon.ico"),
+    icon: getIconPath(),
     title: "TavernOS - 初始设置",
     webPreferences: {
       contextIsolation: true,
@@ -473,8 +485,8 @@ app.on("before-quit", () => {
   isQuitting = true;
   if (backendProcess) {
     try {
-      // Kill the entire process tree on Windows.
-      // Guard against `pid` being undefined (process may not have spawned).
+      // Kill the backend process tree.
+      // On Windows, use taskkill for tree-kill. On macOS/Linux, use SIGTERM.
       if (process.platform === "win32") {
         if (backendProcess.pid) {
           spawn("taskkill", ["/PID", String(backendProcess.pid), "/T", "/F"], {
@@ -482,7 +494,11 @@ app.on("before-quit", () => {
           });
         }
       } else {
-        backendProcess.kill("SIGTERM");
+        // On macOS/Linux, kill the process group (negative PID)
+        if (backendProcess.pid) {
+          try { process.kill(-backendProcess.pid, "SIGTERM"); } catch {}
+          backendProcess.kill("SIGTERM");
+        }
       }
     } catch (e) {
       console.error("[electron] Failed to kill backend:", e);
@@ -494,12 +510,9 @@ app.on("before-quit", () => {
 // IPC handlers for onboarding
 // ---------------------------------------------------------------------------
 ipcMain.handle("get-available-disks", async () => {
-  // On Windows, check which drive letters are available
   const disks = [];
   if (process.platform === "win32") {
     try {
-      // Use PowerShell via async `exec` (non-blocking) instead of execSync so
-      // the main process event loop isn't stalled while PowerShell loads.
       const output = await new Promise((resolve, reject) => {
         exec(
           'powershell -Command "Get-CimInstance Win32_LogicalDisk | Select-Object -ExpandProperty Name"',
@@ -515,7 +528,6 @@ ipcMain.handle("get-available-disks", async () => {
         disks.push({ drive: letter, label: `${letter}\\` });
       }
     } catch {
-      // Fallback: just list common drives
       for (let i = 67; i <= 90; i++) {
         const letter = String.fromCharCode(i) + ":";
         if (fs.existsSync(letter + "\\")) {
@@ -523,14 +535,44 @@ ipcMain.handle("get-available-disks", async () => {
         }
       }
     }
+  } else if (process.platform === "darwin") {
+    // macOS: list mounted volumes under /Volumes and home directory
+    disks.push({ drive: app.getPath("home"), label: "Home" });
+    try {
+      const volumes = fs.readdirSync("/Volumes", { withFileTypes: true });
+      for (const v of volumes) {
+        if (v.isDirectory() || v.isBlockDevice()) {
+          const volPath = path.join("/Volumes", v.name);
+          disks.push({ drive: volPath, label: v.name });
+        }
+      }
+    } catch {}
+  } else {
+    // Linux: list /home and /mnt, /media
+    disks.push({ drive: app.getPath("home"), label: "Home" });
+    for (const mnt of ["/mnt", "/media"]) {
+      try {
+        const entries = fs.readdirSync(mnt, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.isDirectory()) {
+            disks.push({ drive: path.join(mnt, e.name), label: e.name });
+          }
+        }
+      } catch {}
+    }
   }
   return disks;
 });
 
 ipcMain.handle("select-disk", async (event, disk) => {
-  // Validate the disk argument to prevent path traversal. Only allow a bare
-  // Windows drive letter (optionally with a trailing backslash), e.g. "D:".
-  if (!/^[A-Za-z]:\\?$/.test(disk)) {
+  // Validate the disk argument to prevent path traversal.
+  // On Windows: only allow a bare drive letter (e.g. "D:" or "D:\").
+  // On macOS/Linux: allow absolute paths under /Volumes, /home, /mnt, /media.
+  const isWin = process.platform === "win32";
+  const validPath = isWin
+    ? /^[A-Za-z]:\\?$/.test(disk)
+    : /^(\/(Volumes|home|mnt|media|Users|tmp))([\/][\w\- .]+)*$/.test(disk);
+  if (!validPath) {
     event.reply("disk-selected", { error: "Invalid disk" });
     return { success: false, error: "Invalid disk" };
   }

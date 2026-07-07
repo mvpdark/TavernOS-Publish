@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ghcr.io/mvpdark/tavernos:latest
     ports:
       - "3179:3179"
     volumes:
