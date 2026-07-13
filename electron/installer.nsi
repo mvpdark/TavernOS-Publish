@@ -14,7 +14,9 @@ SetCompressor zlib
 
 
 
-!cd "C:\TRAE\TavernOS\Tavern"
+; NOTE: Do NOT hardcode !cd here — makensis is invoked with cwd set to the
+
+; project root by build-installer.cjs, so relative paths work correctly.
 
 
 
@@ -41,11 +43,13 @@ SetCompressor zlib
 
 
 ; --- Release Directory (configurable via -DRELEASE_DIR) ---
-
 !ifndef RELEASE_DIR
-
   !define RELEASE_DIR "release"
+!endif
 
+; --- Project Root (passed via -DPROJECT_ROOT by build-installer.cjs) ---
+!ifndef PROJECT_ROOT
+  !define PROJECT_ROOT "."
 !endif
 
 
@@ -54,7 +58,7 @@ SetCompressor zlib
 
 Name "TavernOS"
 
-OutFile "${RELEASE_DIR}\TavernOS-Setup-${APP_VERSION}-x64.exe"
+OutFile "${PROJECT_ROOT}\${RELEASE_DIR}\TavernOS-Setup-${APP_VERSION}-x64.exe"
 
 InstallDir "$LOCALAPPDATA\TavernOS"
 
@@ -72,9 +76,9 @@ BrandingText "TavernOS"
 
 ; --- Icons ---
 
-!define MUI_ICON "electron\build\icon.ico"
+!define MUI_ICON "${PROJECT_ROOT}\electron\build\icon.ico"
 
-!define MUI_UNICON "electron\build\icon.ico"
+!define MUI_UNICON "${PROJECT_ROOT}\electron\build\icon.ico"
 
 !define MUI_ABORTWARNING
 
@@ -84,15 +88,15 @@ BrandingText "TavernOS"
 
 !define MUI_HEADERIMAGE
 
-!define MUI_HEADERIMAGE_BITMAP "electron\build\installer-header.bmp"
+!define MUI_HEADERIMAGE_BITMAP "${PROJECT_ROOT}\electron\build\installer-header.bmp"
 
 
 
 ; --- Welcome/Finish Sidebar ---
 
-!define MUI_WELCOMEFINISHPAGE_BITMAP "electron\build\installer-sidebar.bmp"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "${PROJECT_ROOT}\electron\build\installer-sidebar.bmp"
 
-!define MUI_UNWELCOMEFINISHPAGE_BITMAP "electron\build\installer-sidebar.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "${PROJECT_ROOT}\electron\build\installer-sidebar.bmp"
 
 
 
@@ -3062,7 +3066,7 @@ Section "Install" SecInstall
 
   DetailPrint "     正在写入核心引擎文件..."
 
-  File /r "${RELEASE_DIR}\win-unpacked\*.*"
+  File /r "${PROJECT_ROOT}\${RELEASE_DIR}\win-unpacked\*.*"
 
 
 

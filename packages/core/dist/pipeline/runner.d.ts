@@ -1,9 +1,9 @@
 import { type AgentContext } from "../agents/base.js";
 import { type ArchitectOutput } from "../agents/architect.js";
-import { type WriterInput } from "../agents/writer.js";
-import { type AuditIssue } from "../agents/auditor.js";
-import { type RevisedParagraph } from "../agents/reviser.js";
-import { type PlannerInput, type PlannedContext } from "../agents/planner.js";
+import { type ScribeInput } from "../agents/scribe.js";
+import { type SentinelIssue } from "../agents/sentinel.js";
+import { type PolishedParagraph } from "../agents/polisher.js";
+import { type ConductorInput, type ConductedContext } from "../agents/conductor.js";
 import type { AssetCatalog } from "../assets/types.js";
 import type { StoryStateDelta } from "../models/story-state.js";
 import type { NarrativeEngine } from "./narrative-engine.js";
@@ -34,11 +34,11 @@ export interface PipelineInput {
         language: string;
         additionalRequirements?: string;
     };
-    /** If provided, the planner agent prepares filtered context before writing. */
-    plannerInput?: PlannerInput;
-    /** Writer input — always required. If plannerInput is provided, its PlannedContext
+    /** If provided, the conductor agent prepares filtered context before writing. */
+    conductorInput?: ConductorInput;
+    /** Writer input — always required. If conductorInput is provided, its ConductedContext
      *  overrides the corresponding writerInput fields (storyBible, currentState, activeHooks, chapterOutline). */
-    writerInput: WriterInput;
+    writerInput: ScribeInput;
     /** Audit mode: "auto" runs audit + auto-revise, "manual" runs audit only, "off" skips audit. */
     auditMode: "auto" | "manual" | "off";
     /** Story context needed for auditing. Required when auditMode !== "off". */
@@ -48,7 +48,7 @@ export interface PipelineInput {
         activeHooks: string;
         chapterSummaries: string;
         /** Genre string for genre-rule checks during audit. When provided,
-         *  the auditor runs string-based genre rule checks (universal +
+         *  the sentinel runs string-based genre rule checks (universal +
          *  genre-specific) after the LLM audit. */
         genre?: string;
     };
@@ -65,9 +65,12 @@ export interface PipelineInput {
      *  Main character names for tracking are extracted from assetCatalog or
      *  the story bible when not explicitly provided. */
     narrativeEngine?: NarrativeEngine;
-    /** Main character IDs for narrative engine tracking. When omitted and
-     *  narrativeEngine is set, the pipeline will attempt to extract character
-     *  names from the story bible or chapter outline. */
+    /** Main character names (NOT IDs) for narrative engine tracking. The
+     *  NarrativeEngine subsystems (SceneClassifier, BondTracker, etc.) use
+     *  character NAME as the key space, so these must be names. When omitted
+     *  and narrativeEngine is set, the pipeline extracts character names from
+     *  the asset catalog (existingAssetCatalog pre-write / assetResult.catalog
+     *  post-write). */
     mainCharacters?: string[];
     /** Optional RAG retriever for vector-based previous-chapter retrieval.
      *  When provided (along with projectId), the pipeline queries relevant
@@ -85,17 +88,17 @@ export interface PipelineInput {
      *  Required when ragRetriever or loreEngine is provided. */
     projectId?: string;
     /** Optional style profile string for style cloning. When provided, injected
-     *  into writerInput.styleProfile so the writer mimics the target style. */
+     *  into writerInput.styleProfile so the scribe mimics the target style. */
     styleProfile?: string;
     /** Insights from the previous chapter's post-write analysis (e.g. unresolved
      *  foreshadows, recurring characters, conflict escalation). When provided,
-     *  the pipeline injects them into the planner input so the planner can
+     *  the pipeline injects them into the conductor input so the conductor can
      *  account for narrative patterns detected in prior chapters. */
     previousInsights?: InsightPattern[];
 }
 export interface ChapterResult {
     architecture?: ArchitectOutput;
-    plannedContext?: PlannedContext;
+    conductedContext?: ConductedContext;
     narrative: string;
     /** The structural skeleton from two-stage writer (when enabled). */
     skeleton?: string;
@@ -103,9 +106,9 @@ export interface ChapterResult {
     /** True when StateExtractor could not parse the LLM response. Callers should
      *  skip merging `delta` into global state and flag the chapter as degraded. */
     degraded?: boolean;
-    auditIssues?: AuditIssue[];
+    auditIssues?: SentinelIssue[];
     revisedNarrative?: string;
-    revisedParagraphs?: RevisedParagraph[];
+    revisedParagraphs?: PolishedParagraph[];
     /** Asset catalog extracted from the finalized chapter content (after revision). */
     assetCatalog?: AssetCatalog;
     /** Post-write narrative analysis result (when narrativeEngine is enabled).
@@ -117,11 +120,11 @@ export interface ChapterResult {
  * Pipeline stage identifiers emitted via the onProgress callback so callers
  * (e.g. an SSE route) can report real-time progress to the UI.
  */
-export type PipelineStage = "architect" | "planner" | "narrative-pre" | "writer" | "auditor" | "reviser" | "consolidator" | "asset-extractor" | "narrative-post";
+export type PipelineStage = "architect" | "conductor" | "narrative-pre" | "writer" | "auditor" | "reviser" | "consolidator" | "asset-extractor" | "narrative-post";
 export declare class StoryOrchestrator {
     private readonly ctx;
     private readonly architect;
-    private readonly planner;
+    private readonly conductor;
     private readonly writer;
     private readonly auditor;
     private readonly reviser;
@@ -131,7 +134,7 @@ export declare class StoryOrchestrator {
      * @param ctx default agent context (client + model).
      * @param resolveContext optional resolver returning a per-agent context with
      *   its own client/model — enables multi-provider division of labor (e.g.
-     *   Kimi for the writer skeleton, Claude for the flesh). When a resolver is
+     *   Kimi for the scribe skeleton, Claude for the flesh). When a resolver is
      *   supplied it takes precedence over modelOverrides for that agent.
      * @param modelOverrides legacy per-agent model overrides on the shared client
      *   (kept for backward compatibility with the CLI).
@@ -142,7 +145,7 @@ export declare class StoryOrchestrator {
      *
      * Flow:
      * 1. (Optional) Architect generates story framework
-     * 2. (Optional) Planner prepares filtered context (overrides writerInput fields)
+     * 2. (Optional) Conductor prepares filtered context (overrides writerInput fields)
      * 2.5. (If narrativeEngine provided) NarrativeEngine.assemblePreWriteContext
      * 3. Writer generates narrative (pure text, no state delta)
      * 4. (If auditMode !== "off" and storyContext provided) Auditor checks continuity

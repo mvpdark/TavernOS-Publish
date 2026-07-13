@@ -8,16 +8,16 @@ export declare const InjectionContextSchema: z.ZodObject<{
     paceRecommendation: z.ZodString;
     totalBudget: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
+    contextBlock: string;
     pinnedFactsBlock: string;
     innerVoiceBlock: string;
-    contextBlock: string;
     timelineBlock: string;
     paceRecommendation: string;
     totalBudget: number;
 }, {
+    contextBlock: string;
     pinnedFactsBlock: string;
     innerVoiceBlock: string;
-    contextBlock: string;
     timelineBlock: string;
     paceRecommendation: string;
     totalBudget: number;

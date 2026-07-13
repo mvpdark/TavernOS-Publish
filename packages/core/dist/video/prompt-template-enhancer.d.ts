@@ -31,5 +31,9 @@ export declare function getTemplateForShot(shot: {
     emotion?: string;
     sceneType?: string;
     characterCount?: number;
+    /** Desired shot type for cinematography-aware matching. */
+    shotType?: string;
+    /** Desired camera movement for cinematography-aware matching. */
+    cameraMovement?: string;
 }): PromptTemplate | undefined;
 //# sourceMappingURL=prompt-template-enhancer.d.ts.map

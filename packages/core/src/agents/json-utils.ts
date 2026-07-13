@@ -98,7 +98,7 @@ export function parseJsonObject(text: string): unknown | null {
  * 3. Extract individual JSON objects via balanced-brace scanning
  * 4. Return an empty array
  *
- * Used by: ConsistencyChecker (auditor).
+ * Used by: Sentinel (auditor).
  */
 export function parseJsonArray(text: string): unknown[] {
   // Level 1: Try full parse
@@ -188,7 +188,7 @@ export function parseAndValidate<S extends ZodTypeAny>(
  * schema. Elements that fail validation are silently skipped.
  * Combines {@link parseJsonArray} with per-element `schema.safeParse()`.
  *
- * Used by: ConsistencyChecker (auditor).
+ * Used by: Sentinel (auditor).
  */
 export function parseAndValidateArray<S extends ZodTypeAny>(
   text: string,
@@ -210,7 +210,7 @@ export function parseAndValidateArray<S extends ZodTypeAny>(
  * This avoids a full YAML parser dependency while handling the predictable
  * two-key structure used by TavernOS prompt templates.
  *
- * Used by: OutlinePlanner, NarrativeWriter, ConsistencyChecker, Planner.
+ * Used by: OutlinePlanner, Scribe, Sentinel, Planner.
  */
 export function extractPromptMessages(promptText: string): { system: string; user: string } {
   const normalized = promptText.replace(/\r\n/g, "\n");

@@ -3,6 +3,7 @@ import type { JSX, DragEvent as ReactDragEvent } from "react";
 import type { SavedClip } from "./types.js";
 import { ConfirmDialog } from "../../components/ui.tsx";
 import { IconGripVertical, IconTrash2, IconRefresh } from "../../components/Icons.tsx";
+import { proxyImageUrl } from "../../api/client.js";
 
 // TODO: i18n — This component contains hardcoded Chinese strings that should be migrated to t() calls.
 //   Key strings to migrate:
@@ -155,7 +156,7 @@ export default function ClipList({
                   {/* Thumbnail */}
                   {clip.thumbnailUrl ? (
                     <img
-                      src={clip.thumbnailUrl}
+                      src={proxyImageUrl(clip.thumbnailUrl)}
                       alt="缩略图"
                       className="h-12 w-20 shrink-0 rounded object-cover"
                     />

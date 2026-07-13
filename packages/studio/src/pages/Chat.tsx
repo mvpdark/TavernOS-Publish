@@ -902,8 +902,9 @@ export default function Chat(): JSX.Element {
   // Active character details (used by both the chat header and VN overlay).
   const activeChar = characters.find((c) => c.filename === selectedChar);
   const activeCharName = activeChar?.data.name ?? selectedChar;
-  const activeCharExt = activeChar?.data.extensions?.tavernos as { avatar?: string } | undefined;
+  const activeCharExt = activeChar?.data.extensions?.tavernos as { avatar?: string; live2dModel?: string } | undefined;
   const activeCharAvatar = activeCharExt?.avatar;
+  const activeCharLive2D = activeCharExt?.live2dModel;
 
   return (
     <div className="flex h-full flex-col">
@@ -1188,6 +1189,7 @@ export default function Chat(): JSX.Element {
         <VisualNovelOverlay
           characterName={activeCharName}
           characterImage={activeCharAvatar}
+          live2dModelUrl={activeCharLive2D}
           messages={messages}
           onClose={() => setVnMode(false)}
           onSend={(text) => void handleSend(text)}

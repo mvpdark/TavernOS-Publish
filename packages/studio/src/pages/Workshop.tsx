@@ -658,7 +658,28 @@ export default function Workshop(): JSX.Element {
               A Cartography of Temporal Units
             </p>
           </div>
-          <div className="flex gap-4 sm:gap-6">
+          <div className="flex flex-wrap items-start gap-4 sm:gap-6">
+            {/* Project switcher — always visible so user can switch projects */}
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-[#555555]">
+                Project
+              </span>
+              <select
+                value={projectId ?? ""}
+                onChange={(e) => {
+                  const p = projects.find((p) => p.id === e.target.value);
+                  if (p) setCurrentProject(p);
+                }}
+                className="rounded border border-[#1A1A1A] bg-[#0A0A0A] px-3 py-1.5 font-mono text-xs text-[#E8E8E8] focus:border-[rgba(201,168,108,0.3)] focus:outline-none"
+              >
+                {projects.length === 0 && <option value="">— 无项目 —</option>}
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name ?? p.id}
+                  </option>
+                ))}
+              </select>
+            </div>
             <SpecimenLabel label="Specimen №" value="OF-2026" accent />
             <SpecimenLabel label="Quantum" value="4s — 15s" />
             <SpecimenLabel
@@ -865,9 +886,9 @@ export default function Workshop(): JSX.Element {
 
                 {/* Scene cards — film frames */}
                 <div className="space-y-3">
-                  {(script.scenes ?? []).map((scene) => (
+                  {(script.scenes ?? []).map((scene, idx) => (
                     <div
-                      key={scene.sceneNumber}
+                      key={`scene-${scene.sceneNumber}-${idx}`}
                       className="group relative overflow-hidden rounded border border-[#1A1A1A] bg-[#0A0A0A] transition-colors hover:border-[rgba(201,168,108,0.15)]"
                     >
                       {/* Sprocket holes — left rail */}
@@ -1031,9 +1052,9 @@ export default function Workshop(): JSX.Element {
 
                 {/* Shot cards — individual film frames */}
                 <div className="space-y-3">
-                  {(shotList.shots ?? []).map((shot) => (
+                  {(shotList.shots ?? []).map((shot, idx) => (
                     <div
-                      key={shot.shotNumber}
+                      key={`shot-${shot.shotNumber}-${idx}`}
                       className="group relative overflow-hidden rounded border border-[#1A1A1A] bg-[#0A0A0A] transition-colors hover:border-[rgba(201,168,108,0.15)]"
                     >
                       {/* Sprocket holes */}
@@ -1185,7 +1206,7 @@ export default function Workshop(): JSX.Element {
                                 </span>
                               </div>
                               <video
-                                src={shotAssets.get(shot.shotNumber)!.videoUrl}
+                                src={proxyImageUrl(shotAssets.get(shot.shotNumber)!.videoUrl)}
                                 controls
                                 className="max-h-56 w-full rounded"
                               />

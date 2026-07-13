@@ -60,12 +60,11 @@ module.exports = async function (context) {
   // 2. Recursively scan resources/ for broken entries and fix them
   scanAndFix(resourcesDir, "resources");
 
-  // 3. Create server/node_modules symlink pointing to runtime-modules
+  // 3. Create server/node_modules junction pointing to runtime-modules
   // This is critical: the ESM server bundle can't find native modules
   // (better-sqlite3, sharp) via NODE_PATH (ESM ignores it). By creating
-  // a node_modules link inside the server/ directory, Node.js's
+  // a node_modules junction inside the server/ directory, Node.js's
   // standard module resolution will find them.
-  // On Windows: "junction" (no admin rights needed). On macOS/Linux: "dir".
   const serverDir = path.join(resourcesDir, "server");
   const serverNodeModules = path.join(serverDir, "node_modules");
   const runtimeModulesDir2 = path.join(resourcesDir, "runtime-modules");
@@ -73,12 +72,11 @@ module.exports = async function (context) {
   try {
     // Remove existing node_modules if present
     try { fs.rmSync(serverNodeModules, { recursive: true, force: true }); } catch {}
-    // Create symlink (junction on Windows, dir on macOS/Linux)
-    const symlinkType = context.electronPlatformName === "win32" ? "junction" : "dir";
-    fs.symlinkSync(runtimeModulesDir2, serverNodeModules, symlinkType);
-    console.log(`[after-pack] Created server/node_modules ${symlinkType} -> runtime-modules`);
+    // Create directory junction (works on Windows without admin rights)
+    fs.symlinkSync(runtimeModulesDir2, serverNodeModules, "junction");
+    console.log("[after-pack] Created server/node_modules junction -> runtime-modules");
   } catch (err) {
-    console.error("[after-pack] Failed to create symlink:", err.message);
+    console.error("[after-pack] Failed to create junction:", err.message);
     // Fallback: copy runtime-modules into server/node_modules
     try {
       copyDirSync(runtimeModulesDir2, serverNodeModules);
@@ -127,24 +125,12 @@ async function flipElectronFuses(context) {
   const { flipFuses, FuseVersion, FuseV1Options } = fuses;
 
   // Resolve the path to the packaged Electron executable.
-  // On Windows: <productName>.exe inside appOutDir.
-  // On macOS:   Contents/MacOS/<productName> inside the .app bundle.
-  // On Linux:   <productName> inside appOutDir.
-  const platform = context.electronPlatformName;
-  let electronBinaryPath;
-  if (platform === "win32") {
-    electronBinaryPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`);
-  } else if (platform === "darwin") {
-    // appOutDir on macOS is the .app bundle directory
-    electronBinaryPath = path.join(
-      context.appOutDir,
-      "Contents",
-      "MacOS",
-      context.packager.appInfo.productFilename
-    );
-  } else {
-    electronBinaryPath = path.join(context.appOutDir, context.packager.appInfo.productFilename);
-  }
+  // On Windows the binary is "<productName>.exe" inside appOutDir.
+  const ext = context.electronPlatformName === "win32" ? ".exe" : "";
+  const electronBinaryPath = path.join(
+    context.appOutDir,
+    `${context.packager.appInfo.productFilename}${ext}`
+  );
 
   console.log("[after-pack] Flipping Electron fuses:", electronBinaryPath);
 
@@ -216,7 +202,6 @@ function scanAndFix(dir, label) {
 
 /**
  * Force-remove a directory or junction using multiple strategies.
- * Works cross-platform (Windows uses `rd`, macOS/Linux uses `rm -rf`).
  */
 function forceRemove(dirPath, label) {
   // Check if the entry exists (lstat doesn't follow symlinks)
@@ -230,16 +215,12 @@ function forceRemove(dirPath, label) {
 
   if (!exists) return;
 
-  // Strategy 1: rename then delete (most reliable for broken junctions/symlinks)
+  // Strategy 1: rename then delete (most reliable for broken junctions)
   try {
     const trash = dirPath + ".trash." + Date.now();
     fs.renameSync(dirPath, trash);
     try { fs.rmSync(trash, { recursive: true, force: true }); } catch {}
-    if (process.platform === "win32") {
-      try { execSync(`rd /s /q "${trash}"`, { stdio: "ignore" }); } catch {}
-    } else {
-      try { execSync(`rm -rf "${trash}"`, { stdio: "ignore" }); } catch {}
-    }
+    try { execSync(`rd /s /q "${trash}"`, { stdio: "ignore" }); } catch {}
     console.log(`[after-pack] Removed ${label} via rename`);
     return;
   } catch {}
@@ -251,28 +232,19 @@ function forceRemove(dirPath, label) {
     return;
   } catch {}
 
-  if (process.platform === "win32") {
-    // Strategy 3: cmd rmdir (for junctions, without /s)
-    try {
-      execSync(`rmdir "${dirPath}"`, { stdio: "ignore" });
-      console.log(`[after-pack] Removed ${label} via rmdir`);
-      return;
-    } catch {}
+  // Strategy 3: cmd rmdir (for junctions, without /s)
+  try {
+    execSync(`rmdir "${dirPath}"`, { stdio: "ignore" });
+    console.log(`[after-pack] Removed ${label} via rmdir`);
+    return;
+  } catch {}
 
-    // Strategy 4: cmd rd /s /q
-    try {
-      execSync(`rd /s /q "${dirPath}"`, { stdio: "ignore" });
-      console.log(`[after-pack] Removed ${label} via rd`);
-      return;
-    } catch {}
-  } else {
-    // Strategy 3 (macOS/Linux): rm -rf
-    try {
-      execSync(`rm -rf "${dirPath}"`, { stdio: "ignore" });
-      console.log(`[after-pack] Removed ${label} via rm -rf`);
-      return;
-    } catch {}
-  }
+  // Strategy 4: cmd rd /s /q
+  try {
+    execSync(`rd /s /q "${dirPath}"`, { stdio: "ignore" });
+    console.log(`[after-pack] Removed ${label} via rd`);
+    return;
+  } catch {}
 
   console.log(`[after-pack] WARNING: Could not remove ${label}`);
 }

@@ -23,6 +23,24 @@ import { parseStreamResponse, parseAnthropicStreamResponse } from "./stream-pars
 import { withTransientRetry } from "./retry.js";
 
 // ---------------------------------------------------------------------------
+// AbortSignal.any() polyfill — combines multiple signals into one
+// ---------------------------------------------------------------------------
+
+function anySignal(signals: (AbortSignal | undefined)[]): AbortSignal {
+  const valid = signals.filter((s): s is AbortSignal => s !== undefined);
+  if (valid.length === 0) return new AbortController().signal;
+  if (valid.length === 1) return valid[0];
+  // Use AbortSignal.any if available, otherwise manual polyfill
+  if (typeof (AbortSignal as any).any === "function") return (AbortSignal as any).any(valid);
+  const controller = new AbortController();
+  for (const sig of valid) {
+    if (sig.aborted) { controller.abort(); break; }
+    sig.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  return controller.signal;
+}
+
+// ---------------------------------------------------------------------------
 // LLMClient Interface (closure-based, no internal state exposed)
 // ---------------------------------------------------------------------------
 
@@ -123,6 +141,7 @@ export async function chatCompletion(
   return withTransientRetry(
     () => executeChatCompletion(config, model, messages, temperature, maxTokens, options),
     TRANSIENT_RETRIES,
+    { signal: options?.signal },
   );
 }
 
@@ -189,7 +208,7 @@ async function executeAnthropicMessages(
     : null;
   const signal = options?.signal
     ? (timeoutController
-      ? AbortSignal.any([options.signal, timeoutController.signal])
+      ? anySignal([options.signal, timeoutController.signal])
       : options.signal)
     : (timeoutController?.signal ?? undefined);
 
@@ -206,7 +225,47 @@ async function executeAnthropicMessages(
     }
 
     if (useStream && response.body) {
-      return await parseAnthropicStreamResponse(response.body, options?.onStreamProgress, options?.onChunk);
+      try {
+        return await parseAnthropicStreamResponse(response.body, options?.onStreamProgress, options?.onChunk);
+      } catch (streamErr) {
+        // If the stream completed but produced no content (compatibility issue),
+        // automatically fall back to a non-streaming request. Same pattern as
+        // the OpenAI path — handles providers whose Anthropic SSE format
+        // differs subtly, producing empty content.
+        if (streamErr instanceof PartialResponseError) {
+          console.warn("[llm] Anthropic stream produced no content, falling back to non-streaming request:", streamErr.message.slice(0, 200));
+          // Re-send the same request without streaming.
+          const fallbackBody: Record<string, unknown> = { ...body };
+          delete fallbackBody.stream;
+          const fallbackResponse = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(fallbackBody),
+            signal,
+          });
+          if (!fallbackResponse.ok) {
+            await throwApiError(fallbackResponse, "LLM API (Anthropic Messages non-streaming fallback)");
+          }
+          const fallbackData = await fallbackResponse.json() as AnthropicMessagesResponse;
+          const fallbackContent = (fallbackData.content ?? [])
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("");
+          if (fallbackContent) {
+            return {
+              content: fallbackContent,
+              usage: {
+                promptTokens: fallbackData.usage?.input_tokens ?? 0,
+                completionTokens: fallbackData.usage?.output_tokens ?? 0,
+                totalTokens: (fallbackData.usage?.input_tokens ?? 0) + (fallbackData.usage?.output_tokens ?? 0),
+              },
+            };
+          }
+          // If even non-streaming returned empty, throw the original error.
+          throw streamErr;
+        }
+        throw streamErr;
+      }
     }
 
     // Non-streaming: parse Anthropic Messages API response
@@ -300,7 +359,7 @@ async function executeChatCompletion(
     : null;
   const signal = options?.signal
     ? (timeoutController
-      ? AbortSignal.any([options.signal, timeoutController.signal])
+      ? anySignal([options.signal, timeoutController.signal])
       : options.signal)
     : (timeoutController?.signal ?? undefined);
 

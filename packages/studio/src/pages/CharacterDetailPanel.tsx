@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import type { JSX } from "react";
 import { Modal } from "../components/ui.tsx";
-import { proxyImageUrl, apiGet, apiPut, apiUpload } from "../api/client.js";
-import type { PersonaCard, CharacterVoice } from "../shared/types.js";
+import { apiGet, apiPost, apiPut, apiUpload } from "../api/client.js";
+import type { PersonaCard, CharacterVoice, CharactersResponse } from "../shared/types.js";
 import { VOICE_PROVIDERS } from "./characters-utils.js";
+import EditableField from "../components/EditableField.js";
+import VoiceBindingSection from "./create/VoiceBindingSection.js";
+import CharacterImageSection from "./create/CharacterImageSection.js";
+import CharacterLive2DSection from "./create/CharacterLive2DSection.js";
 
 // ---------------------------------------------------------------------------
 // CharacterDetailPanel — detail modal for a character card.
@@ -31,91 +35,6 @@ interface CharacterDetailPanelProps {
   onCardUpdated?: (card: PersonaCard) => void;
 }
 
-/** Editable text field with inline edit capability. */
-function EditableField({
-  label,
-  value,
-  onSave,
-}: {
-  label: string;
-  value: string;
-  onSave: (newValue: string) => Promise<void>;
-}): JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async (): Promise<void> => {
-    if (draft === value) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(draft);
-      setEditing(false);
-    } catch (e) {
-      console.error(`[detail] save ${label} failed:`, e);
-      // Revert on failure
-      setDraft(value);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancel = (): void => {
-    setDraft(value);
-    setEditing(false);
-  };
-
-  return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs text-[#C9A86C]">{label}</h4>
-        {!editing && (
-          <button
-            onClick={() => { setDraft(value); setEditing(true); }}
-            className="text-[10px] text-gray-500 hover:text-[#C9A86C] transition-colors"
-          >
-            编辑
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <div className="mt-1 space-y-2">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={4}
-            autoFocus
-            className="w-full rounded-lg border border-[rgba(201,168,108,0.3)] bg-[#0F0F0F] px-3 py-2 text-sm text-[#E8E8E8] focus:border-[#C9A86C] focus:outline-none"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => void handleSave()}
-              disabled={saving}
-              className="rounded bg-[rgba(201,168,108,0.2)] px-2 py-0.5 text-[10px] text-[#C9A86C] hover:bg-[rgba(201,168,108,0.3)] disabled:opacity-50"
-            >
-              {saving ? "保存中…" : "保存"}
-            </button>
-            <button
-              onClick={handleCancel}
-              className="rounded bg-[#1C1C1E] px-2 py-0.5 text-[10px] text-gray-400 hover:bg-[#2A2A2A]"
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="mt-1 text-sm text-gray-300 whitespace-pre-wrap">
-          {value || <span className="text-gray-600 italic">（空）</span>}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function CharacterDetailPanel({
   card,
   projectId,
@@ -131,12 +50,28 @@ export function CharacterDetailPanel({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentCard, setCurrentCard] = useState<PersonaCard>(card);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [generating, setGenerating] = useState(false);
+  // Three-view generation polling — keeps `generating` true until the new
+  // three-view image is detected (or polling times out / the panel unmounts).
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingCancelledRef = useRef(false);
 
   // Update local card when prop changes
   useEffect(() => {
     setCurrentCard(card);
   }, [card]);
+
+  // Cancel any in-flight three-view polling when the panel unmounts so we
+  // don't keep fetching / calling setState after the component is gone.
+  useEffect(() => {
+    return () => {
+      pollingCancelledRef.current = true;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Load TTS providers on mount.
   useEffect(() => {
@@ -229,7 +164,6 @@ export function CharacterDetailPanel({
       setUploadError(msg);
     } finally {
       setUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -249,6 +183,100 @@ export function CharacterDetailPanel({
     }
   };
 
+  // Save Live2D model URL to card extensions
+  const handleSaveLive2D = async (url: string): Promise<void> => {
+    try {
+      const tavernos = (currentCard.data.extensions as Record<string, unknown> | undefined)
+        ?.tavernos as Record<string, unknown> | undefined ?? {};
+      if (url.trim()) {
+        tavernos.live2dModel = url.trim();
+      } else {
+        delete tavernos.live2dModel;
+      }
+      const payload = {
+        ...currentCard.data,
+        extensions: { ...(currentCard.data.extensions ?? {}), tavernos },
+      };
+      const updated = await apiPut<PersonaCard>(
+        `/projects/${projectId}/characters/${encodeURIComponent(currentCard.filename)}`,
+        payload,
+      );
+      setCurrentCard(updated);
+      onCardUpdated?.(updated);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setUploadError(msg);
+    }
+  };
+
+  // Poll for the three-view result after kicking off background generation.
+  // The generate-three-view API returns immediately (the task runs in the
+  // background); without polling the panel would not refresh until it is closed
+  // and reopened. We poll every 3s (max 10 times) for a new threeViewUrl.
+  const startThreeViewPolling = (): void => {
+    const filename = currentCard.filename;
+    const prevExt = (currentCard.data.extensions as Record<string, unknown> | undefined)
+      ?.tavernos as Record<string, unknown> | undefined;
+    const previousThreeView = prevExt?.threeViewUrl as string | undefined;
+
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const poll = async (): Promise<void> => {
+      if (pollingCancelledRef.current) return;
+      attempts++;
+      try {
+        const data = await apiGet<CharactersResponse>(`/projects/${projectId}/characters`);
+        if (pollingCancelledRef.current) return;
+        const updated = (data.characters ?? []).find((c) => c.filename === filename);
+        if (updated) {
+          const newExt = (updated.data.extensions as Record<string, unknown> | undefined)
+            ?.tavernos as Record<string, unknown> | undefined;
+          const newThreeView = newExt?.threeViewUrl as string | undefined;
+          if (newThreeView && newThreeView !== previousThreeView) {
+            // Result detected — refresh the panel and notify the parent.
+            setCurrentCard(updated);
+            onCardUpdated?.(updated);
+            setGenerating(false);
+            return;
+          }
+        }
+      } catch {
+        // Transient fetch error — keep polling.
+      }
+      if (attempts >= maxAttempts) {
+        // Timeout: stop the spinner. The background task may still finish
+        // later (the parent list auto-refreshes via its own task watcher); the
+        // user can reopen the panel to see the result.
+        setGenerating(false);
+        return;
+      }
+      pollTimerRef.current = setTimeout(poll, 3000);
+    };
+
+    pollTimerRef.current = setTimeout(poll, 3000);
+  };
+
+  // 一键生成角色三视图：触发后台任务生成三视图图片
+  const handleGenerateThreeView = async (): Promise<void> => {
+    setUploadError(null);
+    setGenerating(true);
+    try {
+      await apiPost<{ taskId: string; status: string }>(
+        `/projects/${projectId}/characters/${encodeURIComponent(currentCard.filename)}/generate-three-view`,
+        {},
+      );
+      // API returns immediately — generation runs in the background. Keep
+      // `generating` true and poll for the result so the panel refreshes the
+      // three-view image without needing to be closed and reopened.
+      startThreeViewPolling();
+    } catch (e) {
+      console.error("Generate three-view failed:", e);
+      setUploadError(e instanceof Error ? e.message : String(e));
+      setGenerating(false);
+    }
+  };
+
   // Resolve provider name for display.
   const providerName = (voice.provider ?? "yunwu");
   const providerLabel = VOICE_PROVIDERS.find((p) => p.id === providerName)?.name ?? providerName;
@@ -263,6 +291,7 @@ export function CharacterDetailPanel({
   const threeView = tavernos?.threeViewUrl as string | undefined;
   const avatar = tavernos?.avatar as string | undefined;
   const displayUrl = threeView || avatar;
+  const live2dModelUrl = tavernos?.live2dModel as string | undefined;
 
   return (
     <Modal
@@ -286,60 +315,22 @@ export function CharacterDetailPanel({
       }
     >
       <div className="space-y-4">
-        {/* 角色图片 + 手动上传 */}
-        <div className="relative">
-          {displayUrl ? (
-            <div className="overflow-hidden rounded-lg">
-              {threeView ? (
-                <div className="relative w-full overflow-hidden rounded-lg">
-                  <img
-                    src={proxyImageUrl(threeView)}
-                    alt={currentCard.data.name}
-                    className="w-full object-contain"
-                    loading="lazy"
-                  />
-                </div>
-              ) : (
-                <img src={proxyImageUrl(displayUrl)} alt={currentCard.data.name} className="h-48 w-full object-cover" />
-              )}
-            </div>
-          ) : (
-            <div className="flex h-48 w-full items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] bg-[#0A0A0A]">
-              {uploadingImage ? (
-                <span className="text-xs text-[#C9A86C] animate-pulse">上传中…</span>
-              ) : (
-                <span className="text-3xl text-gray-700">👤</span>
-              )}
-            </div>
-          )}
+        <CharacterImageSection
+          cardName={currentCard.data.name}
+          displayUrl={displayUrl}
+          threeViewUrl={threeView}
+          generating={generating}
+          uploadingImage={uploadingImage}
+          uploadError={uploadError}
+          onGenerateThreeView={() => void handleGenerateThreeView()}
+          onImageUpload={(file) => void handleImageUpload(file)}
+        />
 
-          {/* 手动上传图片按钮 */}
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleImageUpload(file);
-              }}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingImage}
-              className="rounded-lg border border-[rgba(201,168,108,0.3)] px-3 py-1.5 text-xs text-[#C9A86C] hover:bg-[rgba(201,168,108,0.08)] disabled:opacity-50"
-            >
-              {uploadingImage ? "上传中…" : "📷 上传图片"}
-            </button>
-            {displayUrl && !threeView && (
-              <span className="text-[10px] text-gray-500">上传后将替换当前头像</span>
-            )}
-          </div>
-          {uploadError && (
-            <p className="mt-1 text-xs text-red-400">{uploadError}</p>
-          )}
-        </div>
+        <CharacterLive2DSection
+          live2dModelUrl={live2dModelUrl}
+          onSave={(url) => void handleSaveLive2D(url)}
+          onClear={() => void handleSaveLive2D("")}
+        />
 
         {/* 基本信息 - inline editable */}
         <EditableField
@@ -367,100 +358,16 @@ export function CharacterDetailPanel({
         />
 
         {/* 专属音色绑定 */}
-        <div className="border-t border-[#1A1A1A] pt-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs text-[#C9A86C]">专属音色</h4>
-            <label className="flex items-center gap-2 text-xs text-[#E8E8E8]">
-              <input
-                type="checkbox"
-                checked={voice.enabled}
-                onChange={(e) => setVoice((prev) => ({ ...prev, enabled: e.target.checked }))}
-                className="accent-[#C9A86C]"
-              />
-              启用
-            </label>
-          </div>
-
-          {voice.enabled && (
-            <div className="mt-3 space-y-3">
-              {/* TTS 供应商 */}
-              <div>
-                <label className="text-xs text-[#E8E8E8]">TTS 供应商</label>
-                <select
-                  value={voice.provider ?? "yunwu"}
-                  onChange={(e) => setVoice((prev) => ({ ...prev, provider: e.target.value, voiceId: undefined }))}
-                  className="mt-1 w-full rounded-lg border border-[#1A1A1A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#E8E8E8]"
-                >
-                  {VOICE_PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 音色选择 */}
-              <div>
-                <label className="text-xs text-[#E8E8E8]">音色</label>
-                {(() => {
-                  const tp = ttsProviders.find((p) => p.id === (voice.provider ?? "yunwu"));
-                  const voiceOpts = tp?.voices ?? [];
-                  return voiceOpts.length > 0 ? (
-                    <select
-                      value={voice.voiceId ?? ""}
-                      onChange={(e) => setVoice((prev) => ({ ...prev, voiceId: e.target.value }))}
-                      className="mt-1 w-full rounded-lg border border-[#1A1A1A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#E8E8E8]"
-                    >
-                      <option value="">— 选择音色 —</option>
-                      {voiceOpts.map((v) => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={voice.voiceId ?? ""}
-                      onChange={(e) => setVoice((prev) => ({ ...prev, voiceId: e.target.value }))}
-                      placeholder="输入音色 ID"
-                      className="mt-1 w-full rounded-lg border border-[#1A1A1A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#E8E8E8]"
-                    />
-                  );
-                })()}
-              </div>
-
-              {/* 语速 */}
-              <div>
-                <label className="text-xs text-[#E8E8E8]">语速 ({voice.speed ?? 1})</label>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={voice.speed ?? 1}
-                  onChange={(e) => setVoice((prev) => ({ ...prev, speed: parseFloat(e.target.value) }))}
-                  className="mt-1 w-full accent-[#C9A86C]"
-                />
-              </div>
-
-              {/* 保存按钮 */}
-              <button
-                onClick={() => void handleSaveVoice()}
-                disabled={saving}
-                className="rounded-lg border border-[rgba(201,168,108,0.3)] px-3 py-1.5 text-xs text-[#C9A86C] hover:bg-[rgba(201,168,108,0.08)] disabled:opacity-50"
-              >
-                {saving ? "保存中…" : voiceSaved ? "✓ 已保存" : "保存音色"}
-              </button>
-            </div>
-          )}
-
-          {/* 未启用时显示当前绑定状态 */}
-          {!voice.enabled && voiceName && (
-            <p className="mt-2 text-xs text-gray-500">
-              当前: {providerLabel} · {voiceName}
-            </p>
-          )}
-          {!voice.enabled && !voiceName && (
-            <p className="mt-2 text-xs text-gray-600">未绑定音色，勾选"启用"后可选择</p>
-          )}
-        </div>
+        <VoiceBindingSection
+          voice={voice}
+          ttsProviders={ttsProviders}
+          saving={saving}
+          voiceSaved={voiceSaved}
+          voiceName={voiceName}
+          providerLabel={providerLabel}
+          onVoiceChange={setVoice}
+          onSave={() => void handleSaveVoice()}
+        />
       </div>
     </Modal>
   );

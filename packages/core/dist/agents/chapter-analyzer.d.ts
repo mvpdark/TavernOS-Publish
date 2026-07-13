@@ -13,6 +13,12 @@ export interface ChapterAnalysisResult {
     factsDegraded: boolean;
     /** Error message when analysis degraded due to a thrown error (undefined on success). */
     readonly error?: string;
+    /** Token usage from the LLM call (undefined when the LLM call fails). */
+    usage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
 }
 /** Chapter analyzer agent produced by the factory (compose pattern). */
 export interface ChapterAnalyzer {

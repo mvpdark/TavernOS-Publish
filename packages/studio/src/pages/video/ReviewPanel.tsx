@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { TextArea } from "../../components/ui.tsx";
 import type { SavedClip, VideoReviewResult } from "./types.js";
 import { verdictColor, scoreColor } from "./utils.js";
+import { proxyImageUrl } from "../../api/client.js";
 import type { JSX } from "react";
 
 /** Tailwind badge classes for an issue severity. */
@@ -92,7 +93,7 @@ export default function ReviewPanel({
             </div>
             {selectedClip.videoUrl && (
               <video
-                src={selectedClip.videoUrl}
+                src={proxyImageUrl(selectedClip.videoUrl)}
                 controls
                 className="mt-2 w-full rounded-lg max-h-48"
               />

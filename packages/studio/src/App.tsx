@@ -25,6 +25,7 @@ const Appearance = lazy(() => import("./pages/Appearance.tsx"));
 const GroupChat = lazy(() => import("./pages/GroupChat.tsx"));
 const Video = lazy(() => import("./pages/Video.tsx"));
 const Workshop = lazy(() => import("./pages/Workshop.tsx"));
+const CanvasPage = lazy(() => import("./pages/canvas/CanvasPage.tsx"));
 const WorldOverview = lazy(() => import("./pages/WorldOverview.tsx"));
 const Assets = lazy(() => import("./pages/Assets.tsx"));
 const Scenes = lazy(() => import("./pages/Scenes.tsx"));
@@ -152,6 +153,7 @@ function StudioLayout(): JSX.Element {
     <CategoryLayout title={t("nav.studio")} subtitle={t("nav.studioSubtitle")}
       subNav={[
         { to: "/studio/workshop", label: t("nav.workshop"), end: true },
+        { to: "/studio/canvas", label: "画布" },
         { to: "/studio/video", label: t("nav.video") },
         { to: "/studio/analytics", label: t("nav.analytics") },
       ]}>
@@ -310,6 +312,7 @@ export default function App(): JSX.Element {
       <Route path="/studio" element={<StudioLayout />}>
         <Route index element={<Navigate to="/studio/workshop" replace />} />
         <Route path="workshop" element={<Workshop />} />
+        <Route path="canvas" element={<CanvasPage />} />
         <Route path="video" element={<Video />} />
         <Route path="analytics" element={<Analytics />} />
       </Route>

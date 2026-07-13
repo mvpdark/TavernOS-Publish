@@ -1,4 +1,4 @@
-import type { RuleAuditInput, RuleAuditResult } from "./types.js";
+import type { RuleSentinelInput, RuleAuditResult } from "./types.js";
 /**
  * Run all rule-based detectors on the chapter content.
  *
@@ -10,7 +10,7 @@ import type { RuleAuditInput, RuleAuditResult } from "./types.js";
  * @param input The audit input with chapter content and optional context.
  * @returns A RuleAuditResult with all detected issues.
  */
-export declare function runRuleAudit(input: RuleAuditInput): RuleAuditResult;
+export declare function runRuleAudit(input: RuleSentinelInput): RuleAuditResult;
 /**
  * Configuration for the rule auditor.
  */
@@ -24,8 +24,8 @@ export interface RuleAuditorConfig {
 /**
  * Create a configured rule auditor function.
  *
- * Returns a function that accepts RuleAuditInput and returns RuleAuditResult,
+ * Returns a function that accepts RuleSentinelInput and returns RuleAuditResult,
  * with the specified detectors enabled or disabled.
  */
-export declare function createRuleAuditor(config?: RuleAuditorConfig): (input: RuleAuditInput) => RuleAuditResult;
+export declare function createRuleAuditor(config?: RuleAuditorConfig): (input: RuleSentinelInput) => RuleAuditResult;
 //# sourceMappingURL=rule-auditor.d.ts.map

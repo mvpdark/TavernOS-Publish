@@ -88,7 +88,7 @@ export default function Characters(): JSX.Element {
   const [pendingCharacters, setPendingCharacters] = useState<PendingCharacter[]>([]);
   const [globalCharacters, setGlobalCharacters] = useState<GlobalCharacter[]>([]);
   // 右键菜单状态
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; projectId: string; projectName: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; projectId: string; projectName: string; characterCard?: PersonaCard } | null>(null);
   const [generatingCover, setGeneratingCover] = useState<string | null>(null); // 正在生成封面的 projectId
   // 角色详情弹窗
   const [detailCard, setDetailCard] = useState<PersonaCard | null>(null);
@@ -405,6 +405,54 @@ export default function Characters(): JSX.Element {
     }
   };
 
+  // 自动匹配确选卡：为指定角色卡匹配确选槽图片（单角色）
+  const handleMatchConfirmedSlot = async (card: PersonaCard): Promise<void> => {
+    if (!selectedProjectId) return;
+    try {
+      const result = await apiPost<{ matched: boolean; message?: string; imageUrl?: string }>(
+        `/projects/${selectedProjectId}/characters/${encodeURIComponent(card.filename)}/match-confirmed-slot`,
+        {},
+      );
+      if (result.matched) {
+        // Refresh characters to reflect the matched slot
+        void fetchCharacters(selectedProjectId);
+      }
+      if (result.message) {
+        setError(result.message);
+      }
+    } catch (e) {
+      console.error("Match confirmed slot failed:", e);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setContextMenu(null);
+    }
+  };
+
+  // 批量自动匹配确选卡：为整本小说的所有未匹配角色批量匹配确选槽
+  const handleBatchMatchConfirmedSlot = async (projectId: string): Promise<void> => {
+    setMatching(true);
+    try {
+      const result = await apiPost<{ matched: number; total: number; skipped: number; message?: string }>(
+        `/projects/${projectId}/match-confirmed-slots`,
+        {},
+      );
+      // Refresh global characters to reflect the matched slots
+      try {
+        const allData = await apiGet<{ characters: GlobalCharacter[] }>("/characters/all");
+        setGlobalCharacters(allData.characters ?? []);
+      } catch { /* non-fatal */ }
+      if (result.message) {
+        setError(result.message);
+      }
+    } catch (e) {
+      console.error("Batch match confirmed slots failed:", e);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMatching(false);
+      setContextMenu(null);
+    }
+  };
+
   // 右键菜单关闭：点击任意位置关闭菜单
   useEffect(() => {
     if (!contextMenu) return;
@@ -610,6 +658,7 @@ export default function Characters(): JSX.Element {
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setContextMenu({ x: e.clientX, y: e.clientY, projectId: pid, projectName: displayName });
                   }}
                 >
@@ -670,29 +719,49 @@ export default function Characters(): JSX.Element {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
-              onClick={() => void handleGenerateCover(contextMenu.projectId)}
-            >
-              {generatingCover === contextMenu.projectId ? "生成中…" : "生成封面"}
-            </button>
-            <button
-              className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
-              onClick={() => {
-                const proj = projects.find((p) => p.id === contextMenu.projectId);
-                if (proj) handleSelectNovel(proj);
-                setContextMenu(null);
-              }}
-            >
-              打开小说
-            </button>
-            <div className="my-1 border-t border-[#2A2A2A]" />
-            <button
-              className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-[#1F1F1F] transition-colors"
-              onClick={() => void handleDeleteProject(contextMenu.projectId, contextMenu.projectName)}
-            >
-              删除小说
-            </button>
+            {contextMenu.characterCard ? (
+              <>
+                <button
+                  className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
+                  onClick={() => void handleMatchConfirmedSlot(contextMenu.characterCard!)}
+                >
+                  自动匹配确选卡
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
+                  onClick={() => void handleBatchMatchConfirmedSlot(contextMenu.projectId)}
+                  disabled={matching}
+                >
+                  {matching ? "匹配中…" : "自动匹配确选卡"}
+                </button>
+                <button
+                  className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
+                  onClick={() => void handleGenerateCover(contextMenu.projectId)}
+                >
+                  {generatingCover === contextMenu.projectId ? "生成中…" : "生成封面"}
+                </button>
+                <button
+                  className="w-full px-4 py-2 text-left text-xs text-gray-300 hover:bg-[#1F1F1F] hover:text-[#C9A86C] transition-colors"
+                  onClick={() => {
+                    const proj = projects.find((p) => p.id === contextMenu.projectId);
+                    if (proj) handleSelectNovel(proj);
+                    setContextMenu(null);
+                  }}
+                >
+                  打开小说
+                </button>
+                <div className="my-1 border-t border-[#2A2A2A]" />
+                <button
+                  className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-[#1F1F1F] transition-colors"
+                  onClick={() => void handleDeleteProject(contextMenu.projectId, contextMenu.projectName)}
+                >
+                  删除小说
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -793,20 +862,28 @@ export default function Characters(): JSX.Element {
             // 查找该角色对应的确选槽图片
             const matchedSlot = confirmedSlots.find((s) => s.name === card.data.name);
             return (
-              <CharacterCard
+              <div
                 key={card.filename}
-                card={card}
-                avatar={avatars[card.filename]}
-                generating={generating.has(card.filename)}
-                weightRank={idx}
-                appearanceCount={asset?.appearanceCount}
-                confirmedSlotUrl={matchedSlot?.imageUrl}
-                onEdit={() => openEdit(card)}
-                onDelete={() => setConfirmDelete(card)}
-                onGenerateAvatar={() => void handleGenerateAvatar(card)}
-                onSelectImage={() => setSelectionCard(card)}
-                onClick={() => setDetailCard(card)}
-              />
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setContextMenu({ x: e.clientX, y: e.clientY, projectId: selectedProjectId, projectName: "", characterCard: card });
+                }}
+              >
+                <CharacterCard
+                  card={card}
+                  avatar={avatars[card.filename]}
+                  generating={generating.has(card.filename)}
+                  weightRank={idx}
+                  appearanceCount={asset?.appearanceCount}
+                  confirmedSlotUrl={matchedSlot?.imageUrl}
+                  onEdit={() => openEdit(card)}
+                  onDelete={() => setConfirmDelete(card)}
+                  onGenerateAvatar={() => void handleGenerateAvatar(card)}
+                  onSelectImage={() => setSelectionCard(card)}
+                  onClick={() => setDetailCard(card)}
+                />
+              </div>
             );
           })}
         </div>

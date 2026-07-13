@@ -1,5 +1,5 @@
 // Message list area — presentational component.
-// Renders the scrollable message list with swipe-style alternative generations,
+// Renders the scrollable message list with SillyTavern-style swipes,
 // inline message editing, copy/delete actions, lightweight Markdown
 // rendering for assistant messages, a streaming cursor, TTS, and the
 // "thinking..." indicator. All state and callbacks arrive as props.

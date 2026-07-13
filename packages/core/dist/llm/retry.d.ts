@@ -15,7 +15,16 @@
  * @param retries - Maximum number of retry attempts (default from TRANSIENT_RETRIES).
  * @throws {LLMRetryExhaustedError} When all attempts fail.
  */
-export declare function withTransientRetry<T>(fn: () => Promise<T>, retries?: number): Promise<T>;
-/** Promise-based sleep helper. */
-export declare function sleep(ms: number): Promise<void>;
+export declare function withTransientRetry<T>(fn: () => Promise<T>, retries?: number, options?: {
+    signal?: AbortSignal;
+}): Promise<T>;
+/**
+ * Promise-based sleep helper.
+ *
+ * @param ms     - Milliseconds to sleep.
+ * @param signal - Optional AbortSignal. If already aborted, rejects
+ *                 immediately. If aborted during the sleep, the timeout is
+ *                 cleared and the promise rejects with an AbortError.
+ */
+export declare function sleep(ms: number, signal?: AbortSignal): Promise<void>;
 //# sourceMappingURL=retry.d.ts.map

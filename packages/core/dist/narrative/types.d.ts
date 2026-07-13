@@ -78,6 +78,7 @@ export interface ScoredFact {
 export interface FetchResult {
     readonly contextBlock: string;
     readonly facts: readonly ScoredFact[];
+    readonly pinnedTruncated: boolean;
     readonly trace: {
         readonly totalCandidates: number;
         readonly pinned: number;

@@ -101,6 +101,7 @@ export default function MusicConfigSection(): JSX.Element | null {
             });
           }}
           options={providers.map((p) => p.id)}
+          optionLabels={providers.map((p) => p.name)}
         />
 
         {currentProvider && currentProvider.models.length > 0 ? (
@@ -109,6 +110,7 @@ export default function MusicConfigSection(): JSX.Element | null {
             value={config.model}
             onChange={(v) => setConfig({ ...config, model: v })}
             options={currentProvider.models.map((m) => m.id)}
+            optionLabels={currentProvider.models.map((m) => m.name)}
           />
         ) : (
           <TextInput

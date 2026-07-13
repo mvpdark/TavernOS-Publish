@@ -68,5 +68,10 @@ export declare class Retriever {
         chunkIndex?: number;
         metadata?: Record<string, unknown>;
     }>): Promise<number[]>;
+    /**
+     * Remove a document from both the vector store and the BM25 index,
+     * keeping the two indexes in sync.
+     */
+    removeDocument(id: number): void;
 }
 //# sourceMappingURL=retriever.d.ts.map

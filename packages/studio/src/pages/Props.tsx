@@ -1,10 +1,14 @@
 // pages/Props.tsx
-// Prop asset management page — displays prop-type assets only.
+// Prop asset management page — two-layer navigation (novel folders → props).
+// Mirrors the Characters.tsx pattern: Layer 1 shows project folder cards,
+// Layer 2 shows the prop assets of the selected project.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectStore } from "../store/project.js";
-import { apiGet } from "../api/client.js";
+import type { Project } from "../store/project.js";
+import { apiGet, proxyImageUrl } from "../api/client.js";
+import { coverColor } from "./characters-utils.js";
 import type { Asset, AssetCatalog } from "./assets/types.js";
 import type { JSX } from "react";
 
@@ -48,12 +52,12 @@ function PropIcon({
 
 function SkeletonCard(): JSX.Element {
   return (
-    <div className="h-44 animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="h-44 animate-pulse rounded-xl border border-[#1A1A1A] bg-[#0F0F0F]">
       <div className="space-y-3 p-4">
-        <div className="h-5 w-2/3 rounded bg-[var(--color-surface-hover)]" />
-        <div className="h-3 w-1/3 rounded bg-[var(--color-surface-hover)]" />
-        <div className="h-3 w-full rounded bg-[var(--color-surface-hover)]" />
-        <div className="h-3 w-5/6 rounded bg-[var(--color-surface-hover)]" />
+        <div className="h-5 w-2/3 rounded bg-[#1A1A1A]" />
+        <div className="h-3 w-1/3 rounded bg-[#1A1A1A]" />
+        <div className="h-3 w-full rounded bg-[#1A1A1A]" />
+        <div className="h-3 w-5/6 rounded bg-[#1A1A1A]" />
       </div>
     </div>
   );
@@ -66,16 +70,16 @@ function SkeletonCard(): JSX.Element {
 function PropCard({ asset }: { readonly asset: Asset }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="btn-press rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-surface-hover)]">
+    <div className="btn-press rounded-xl border border-[#1A1A1A] bg-[#0F0F0F] p-4 transition-colors hover:border-[#C9A86C] hover:bg-[#1A1A1A]">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-hover)] text-[var(--color-primary)]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1A1A1A] text-[#C9A86C]">
           <PropIcon size={20} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium text-[var(--color-text)]">
+          <h3 className="truncate text-sm font-medium text-[#E0E0E0]">
             {asset.name}
           </h3>
-          <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">
+          <p className="mt-0.5 text-xs text-[#666666]">
             {t("props.chapterRange", {
               start: asset.firstChapter,
               end: asset.lastChapter,
@@ -89,7 +93,7 @@ function PropCard({ asset }: { readonly asset: Asset }): JSX.Element {
           {asset.aliases.map((alias) => (
             <span
               key={alias}
-              className="rounded bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)]"
+              className="rounded bg-[#1A1A1A] px-1.5 py-0.5 text-[10px] text-[#999999]"
             >
               {alias}
             </span>
@@ -97,11 +101,11 @@ function PropCard({ asset }: { readonly asset: Asset }): JSX.Element {
         </div>
       )}
 
-      <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
+      <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-[#999999]">
         {asset.description || "—"}
       </p>
 
-      <div className="mt-3 border-t border-[var(--color-border)] pt-2 text-[10px] text-[var(--color-text-faint)]">
+      <div className="mt-3 border-t border-[#1A1A1A] pt-2 text-[10px] text-[#666666]">
         {asset.appearanceCount}x
       </div>
     </div>
@@ -109,41 +113,110 @@ function PropCard({ asset }: { readonly asset: Asset }): JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// Props page.
+// Props page — two-layer navigation.
 // ---------------------------------------------------------------------------
 
 export default function Props(): JSX.Element {
-  const { t } = useTranslation();
-  const currentProject = useProjectStore((s) => s.currentProject);
-  const projectId = currentProject?.id;
+  // Project list comes from the store; we do NOT depend on currentProject.
+  const projects = useProjectStore((s) => s.projects);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
 
-  const [catalog, setCatalog] = useState<AssetCatalog | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Layer state: null = overview (novel folders), string = viewing props of projectId.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Props of the currently selected project (Layer 2).
+  const [props, setProps] = useState<Asset[]>([]);
+  // Per-project prop counts shown on Layer 1 folder cards.
+  const [propCounts, setPropCounts] = useState<Record<string, number>>({});
+
+  const [loading, setLoading] = useState(false);
+  const [loadingCounts, setLoadingCounts] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const loadData = useCallback(() => {
-    if (!projectId) return;
+  // Load the project list on mount.
+  useEffect(() => {
+    void (async () => {
+      setLoadingProjects(true);
+      await fetchProjects();
+      setLoadingProjects(false);
+    })();
+  }, [fetchProjects]);
+
+  // Load prop counts for every project so Layer 1 cards can show counts.
+  // Calls apiGet('/projects/:id/assets') per project and reads the props array.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (projects.length === 0) {
+        setPropCounts({});
+        return;
+      }
+      setLoadingCounts(true);
+      try {
+        const results = await Promise.all(
+          projects.map(async (p): Promise<readonly [string, number]> => {
+            try {
+              const data = await apiGet<AssetCatalog>(`/projects/${p.id}/assets`);
+              return [p.id, (data.props ?? []).length] as const;
+            } catch {
+              // A single project failing should not break the whole grid.
+              return [p.id, 0] as const;
+            }
+          }),
+        );
+        if (cancelled) return;
+        const counts: Record<string, number> = {};
+        for (const [id, n] of results) counts[id] = n;
+        setPropCounts(counts);
+      } finally {
+        if (!cancelled) setLoadingCounts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projects]);
+
+  // Load props for the selected project (Layer 2).
+  const loadProps = useCallback(async (id: string): Promise<void> => {
     setLoading(true);
     setError(null);
-    apiGet<AssetCatalog>(`/projects/${projectId}/assets`)
-      .then((data) => {
-        setCatalog(data);
-        setLoading(false);
-      })
-      .catch((e) => {
-        setError(e instanceof Error ? e.message : String(e));
-        setLoading(false);
-      });
-  }, [projectId]);
+    try {
+      const data = await apiGet<AssetCatalog>(`/projects/${id}/assets`);
+      setProps(data.props ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setProps([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (!selectedProjectId) {
+      setProps([]);
+      return;
+    }
+    void loadProps(selectedProjectId);
+  }, [selectedProjectId, loadProps]);
+
+  const handleSelectNovel = (p: Project): void => {
+    setSelectedProjectId(p.id);
+    setSearchQuery("");
+    setError(null);
+  };
+
+  const handleBackToSelector = (): void => {
+    setSelectedProjectId(null);
+    setProps([]);
+    setSearchQuery("");
+    setError(null);
+  };
 
   // Prop assets filtered by the search query (name / aliases / description).
   const filteredProps = useMemo<Asset[]>(() => {
-    const props = catalog?.props ?? [];
     if (!searchQuery.trim()) return props;
     const q = searchQuery.toLowerCase();
     return props.filter((asset) => {
@@ -152,91 +225,155 @@ export default function Props(): JSX.Element {
       const descMatch = asset.description.toLowerCase().includes(q);
       return nameMatch || aliasMatch || descMatch;
     });
-  }, [catalog, searchQuery]);
+  }, [props, searchQuery]);
 
-  const totalCount = catalog?.props?.length ?? 0;
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
 
-  // No project selected.
-  if (!projectId) {
+  // --- Render: Layer 1 (novel folder overview) ---
+  if (!selectedProjectId) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-light text-[var(--color-text)]">
-          {t("props.title")}
-        </h1>
-        <p className="mt-6 text-sm text-[var(--color-text-muted)]">
-          {t("dashboard.selectProject")}
-        </p>
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-light">道具管理</h1>
+          <p className="mt-0.5 text-sm text-gray-500">管理小说中的道具资产</p>
+        </div>
+
+        {error && (
+          <p className="mb-4 rounded-lg bg-[rgba(201,104,90,0.08)] p-3 text-sm text-[#C9685A]">
+            {error}
+          </p>
+        )}
+
+        {/* 小说道具 — folder cards */}
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-medium text-gray-400">小说道具</h2>
+          <span className="text-xs text-gray-600">{projects.length} 本小说</span>
+        </div>
+
+        {loadingProjects ? (
+          <div className="flex flex-wrap gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-44 w-[120px] animate-pulse rounded-lg border border-[#1A1A1A] bg-[#0F0F0F]"
+              />
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[#2A2A2A] p-12 text-center text-gray-500">
+            暂无小说项目
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-4">
+            {projects.map((p) => {
+              const colors = coverColor(p.name);
+              const count = propCounts[p.id] ?? 0;
+              return (
+                <div
+                  key={p.id}
+                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-[#1A1A1A] bg-[#0F0F0F] transition-all hover:border-[#C9A86C]/30 hover:shadow-2xl"
+                  style={{ width: 120 }}
+                  onClick={() => handleSelectNovel(p)}
+                >
+                  <div className="relative h-44 bg-[#0A0A0A]">
+                    {p.coverUrl ? (
+                      <img
+                        src={proxyImageUrl(p.coverUrl)}
+                        alt={p.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className={`h-full w-full bg-gradient-to-br ${colors.bg}`} />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    {/* Prop badge */}
+                    <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border border-[#0F0F0F] bg-[#1A1A1A] text-[#C9A86C]">
+                      <PropIcon size={14} />
+                    </div>
+                    <div className="absolute bottom-2 left-0 right-0 text-center">
+                      <p className="truncate text-sm font-medium text-[#C9A86C]">{p.name}</p>
+                      <p className="text-[9px] text-gray-500">{count} 个道具</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {loadingCounts && projects.length > 0 && (
+          <p className="mt-4 text-center text-xs text-gray-600">加载道具数量中…</p>
+        )}
       </div>
     );
   }
 
+  // --- Render: Layer 2 (props of the selected project) ---
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] px-6 py-4">
-        <div className="flex items-center justify-between">
+    <div className="p-8">
+      {/* Header with back button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBackToSelector}
+            className="text-sm text-gray-500 hover:text-[#C9A86C]"
+          >
+            ← 选择小说
+          </button>
           <div>
-            <h1 className="text-xl font-light text-[var(--color-text)]">
-              {t("props.title")}
-            </h1>
-            <p className="mt-0.5 text-xs text-[var(--color-text-faint)]">
-              {totalCount} {totalCount === 1 ? "prop" : "props"}
+            <h1 className="text-2xl font-light">道具管理</h1>
+            <p className="mt-0.5 text-sm text-gray-500">
+              {selectedProject?.name ?? selectedProjectId}
+              {props.length > 0 && ` · ${props.length} 个道具`}
             </p>
           </div>
         </div>
-
         {/* Search */}
-        <div className="mt-3">
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t("props.search")}
-            className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)] focus:border-[var(--color-primary)] focus:outline-none"
-          />
-        </div>
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="搜索道具…"
+          className="w-full max-w-md rounded-lg border border-[#1A1A1A] bg-[#0F0F0F] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-[#C9A86C]/40 focus:outline-none"
+        />
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {/* Loading state */}
-        {loading ? (
-          <div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-            <p className="mt-4 text-center text-xs text-[var(--color-text-faint)]">
-              {t("props.loading")}
-            </p>
-          </div>
-        ) : /* Error state */ error ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <p className="text-sm text-red-400">{error}</p>
-            <button
-              onClick={loadData}
-              className="btn-press mt-4 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
-            >
-              {t("common.retry")}
-            </button>
-          </div>
-        ) : /* Empty state */ filteredProps.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-faint)]">
-              <PropIcon size={32} />
-            </div>
-            <p className="max-w-sm text-sm text-[var(--color-text-muted)]">
-              {t("props.empty")}
-            </p>
-          </div>
-        ) : (
-          /* Prop grid */
+      <div className="mt-6">
+      {loading ? (
+        <div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProps.map((asset) => (
-              <PropCard key={asset.id} asset={asset} />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
             ))}
           </div>
-        )}
+          <p className="mt-4 text-center text-xs text-gray-600">加载中…</p>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={() => void loadProps(selectedProjectId)}
+            className="btn-press mt-4 rounded-lg bg-[#C9A86C] px-4 py-2 text-sm font-medium text-black"
+          >
+            重试
+          </button>
+        </div>
+      ) : filteredProps.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#1A1A1A] text-[#C9A86C]">
+            <PropIcon size={32} />
+          </div>
+          <p className="max-w-sm text-sm text-gray-500">该项目暂无道具</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredProps.map((asset) => (
+            <PropCard key={asset.id} asset={asset} />
+          ))}
+        </div>
+      )}
       </div>
     </div>
   );

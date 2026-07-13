@@ -112,7 +112,9 @@ function TaskRow({ task }: { task: Task }): JSX.Element {
 }
 
 export default function TaskIndicator(): JSX.Element | null {
-  const { tasks, startPolling, stopPolling } = useTaskStore();
+  const tasks = useTaskStore((s) => s.tasks);
+  const startPolling = useTaskStore((s) => s.startPolling);
+  const stopPolling = useTaskStore((s) => s.stopPolling);
   const [expanded, setExpanded] = useState(true);
   const listId = "task-indicator-list";
 

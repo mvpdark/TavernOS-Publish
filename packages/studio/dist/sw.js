@@ -9,7 +9,7 @@
 // Only registered in production builds — never active during Vite dev (HMR).
 // ---------------------------------------------------------------------------
 
-const CACHE_NAME = 'tavernos-v1';
+const CACHE_NAME = 'tavernos-v2';
 
 // Pre-cached on install. Other static assets (hashed JS/CSS) are cached
 // on first fetch via the cache-first handler below.

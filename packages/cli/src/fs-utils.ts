@@ -10,13 +10,21 @@ export async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
 }
 
-/** Read and parse a JSON file, returning null on any I/O or parse error. */
+/**
+ * Read and parse a JSON file.
+ *
+ * Returns `null` only when the file does not exist (ENOENT). Any other
+ * error (e.g. a malformed JSON payload or an I/O failure) is re-thrown
+ * with context so data corruption is not silently masked.
+ */
 export async function readJson<T>(filePath: string): Promise<T | null> {
   try {
-    const content = await fs.readFile(filePath, "utf8");
-    return JSON.parse(content) as T;
-  } catch {
-    return null;
+    const raw = await fs.readFile(filePath, "utf8");
+    return JSON.parse(raw) as T;
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    // Re-throw JSON parse errors and other I/O errors with context.
+    throw new Error(`Failed to read ${filePath}: ${e?.message ?? e}`);
   }
 }
 

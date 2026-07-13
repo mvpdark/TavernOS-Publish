@@ -24,6 +24,9 @@ export declare class VectorStore {
     private static readonly HNSW_MAX_ELEMENTS;
     private static readonly HNSW_PERSIST_INTERVAL;
     private addCounter;
+    /** Tracks the current capacity ceiling for HNSW indices, doubled on each
+     *  resize so the index can grow beyond the initial HNSW_MAX_ELEMENTS. */
+    private currentMaxElements;
     constructor(bookDir: string);
     private migrate;
     /**

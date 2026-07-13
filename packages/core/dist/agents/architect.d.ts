@@ -19,7 +19,7 @@ export interface OutlinePlanner {
     }, options?: AgentChatOptions): Promise<ArchitectOutput>;
 }
 /**
- * Factory: build an OutlinePlanner agent by composing a shared runtime.
+ * Factory: build an OutlineConductor agent by composing a shared runtime.
  * Replaces the former `class OutlinePlanner extends BaseAgent`.
  */
 export declare function createOutlinePlanner(ctx: AgentContext): OutlinePlanner;

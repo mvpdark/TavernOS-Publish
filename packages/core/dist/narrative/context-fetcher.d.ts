@@ -17,7 +17,8 @@ export declare class ContextFetcher {
     constructor(vault: FactVault, config?: FetcherConfig, linkGraph?: LinkGraph);
     /** Fetch relevant facts and assemble a context block. */
     fetch(query: string): FetchResult;
-    /** Assemble a text block from ranked facts, respecting char budget. */
+    /** Assemble a text block from ranked facts, respecting char budget.
+     *  Returns the context block and whether pinned facts were truncated. */
     private assembleBlock;
     /** Format a single fact as a line in the context block. */
     private formatFactLine;

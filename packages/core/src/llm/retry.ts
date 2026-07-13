@@ -38,6 +38,7 @@ function isAbortError(error: unknown): boolean {
 export async function withTransientRetry<T>(
   fn: () => Promise<T>,
   retries: number = TRANSIENT_RETRIES,
+  options?: { signal?: AbortSignal },
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -59,7 +60,7 @@ export async function withTransientRetry<T>(
       if (attempt < retries) {
         // Exponential backoff with full jitter: base * 2^attempt + random(0, base)
         const delay = TRANSIENT_RETRY_DELAY_MS * Math.pow(2, attempt) + Math.random() * TRANSIENT_RETRY_DELAY_MS;
-        await sleep(delay);
+        await sleep(delay, options?.signal);
       }
     }
   }
@@ -70,7 +71,27 @@ export async function withTransientRetry<T>(
   );
 }
 
-/** Promise-based sleep helper. */
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Promise-based sleep helper.
+ *
+ * @param ms     - Milliseconds to sleep.
+ * @param signal - Optional AbortSignal. If already aborted, rejects
+ *                 immediately. If aborted during the sleep, the timeout is
+ *                 cleared and the promise rejects with an AbortError.
+ */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("aborted", "AbortError"));
+      return;
+    }
+    const id = setTimeout(resolve, ms);
+    if (signal) {
+      const onAbort = () => {
+        clearTimeout(id);
+        reject(new DOMException("aborted", "AbortError"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
 }

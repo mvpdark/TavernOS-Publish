@@ -7,6 +7,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { proxyImageUrl } from "../api/client.js";
+import Live2DCanvas from "./Live2DCanvas.js";
+import { toLive2DEmotion } from "../lib/live2d-emotions.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +22,8 @@ interface VNMessage {
 export interface VisualNovelOverlayProps {
   characterName: string;
   characterImage?: string;
+  /** Live2D model URL (.model3.json). When provided, renders Live2D instead of static image. */
+  live2dModelUrl?: string;
   messages: VNMessage[];
   onClose: () => void;
   onSend: (text: string) => void;
@@ -90,6 +94,7 @@ function chunkSize(len: number): number {
 export default function VisualNovelOverlay({
   characterName,
   characterImage,
+  live2dModelUrl,
   messages,
   onClose,
   onSend,
@@ -301,9 +306,15 @@ export default function VisualNovelOverlay({
         ))}
       </div>
 
-      {/* Character sprite */}
+      {/* Character sprite — Live2D model or static image */}
       <div className="relative z-10 flex flex-1 items-end justify-center pb-2">
-        {imgSrc ? (
+        {live2dModelUrl ? (
+          <Live2DCanvas
+            modelUrl={live2dModelUrl}
+            emotion={toLive2DEmotion(emotion)}
+            className="h-[58vh] w-full max-w-[80vw]"
+          />
+        ) : imgSrc ? (
           <img
             key={imgSrc}
             src={imgSrc}

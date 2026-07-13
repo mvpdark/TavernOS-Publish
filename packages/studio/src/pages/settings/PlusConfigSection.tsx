@@ -13,7 +13,7 @@ import type {
 /** Aspect ratio quick options. */
 const ASPECT_RATIOS = ["16:9", "3:4", "2:3", "1:1", "4:3", "9:16"];
 
-/** Image generation version options via yunwu midjourney-proxy (latest first). */
+/** Midjourney version options (latest first). */
 const MJ_VERSIONS = ["8.1", "8", "7", "6.1"];
 
 /**
@@ -342,7 +342,7 @@ export default function PlusConfigSection(): JSX.Element {
       >
         <h2 className="text-lg font-light text-[#C9A86C]">Plus 模块（每日自动生成角色）</h2>
         <p className="mt-1 text-sm text-[#787878]">
-          每天定时调用 LLM 生成角色设定 + 图片代理生成头像，静默保存到 WebDAV 与本地角色库
+          每天定时调用 LLM 生成角色设定 + Midjourney 生成头像，静默保存到 WebDAV 与本地角色库
         </p>
 
         {!storageConfigured && (

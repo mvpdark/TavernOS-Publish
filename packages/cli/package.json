@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tavernos/core": "*",
+    "@tavernos/core": "workspace:*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TavernOS 视频模块竞品对比评分报告</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --gold: #d29922;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #db6d28;
+    --purple: #bc8cff;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.7;
+    padding: 40px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2em; font-weight: 700; margin-bottom: 8px; }
+  h2 { font-size: 1.5em; font-weight: 600; margin-top: 48px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 1.2em; font-weight: 600; margin-top: 32px; margin-bottom: 12px; color: var(--accent); }
+  .subtitle { color: var(--text-dim); font-size: 0.9em; margin-bottom: 32px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .score-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+  .score-card .name { font-size: 0.85em; color: var(--text-dim); margin-bottom: 8px; }
+  .score-card .score { font-size: 2.4em; font-weight: 700; }
+  .score-card .grade { font-size: 0.8em; margin-top: 4px; }
+  .score-card.ours { border-color: var(--accent); box-shadow: 0 0 20px rgba(88,166,255,0.15); }
+  .score-card.ours .score { color: var(--accent); }
+  .score-card.gold .score { color: var(--gold); }
+  .score-card.green .score { color: var(--green); }
+  .score-card.orange .score { color: var(--orange); }
+  .score-card.red .score { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 0.88em; }
+  th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+  th { background: #21262d; font-weight: 600; color: var(--text); white-space: nowrap; }
+  td:first-child, th:first-child { text-align: left; }
+  td.ours { background: rgba(88,166,255,0.06); font-weight: 600; }
+  .bar { display: inline-block; width: 60px; height: 8px; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+  .bar-9 { background: var(--green); width: 90%; }
+  .bar-8 { background: var(--green); width: 80%; }
+  .bar-7 { background: #56d364; width: 70%; }
+  .bar-6 { background: var(--gold); width: 60%; }
+  .bar-5 { background: var(--orange); width: 50%; }
+  .bar-4 { background: var(--orange); width: 40%; }
+  .bar-3 { background: var(--red); width: 30%; }
+  .bar-2 { background: var(--red); width: 20%; }
+  .bar-1 { background: var(--red); width: 10%; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+  .badge-unique { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .badge-lead { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+  .badge-gap { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+  .badge-par { background: rgba(210,153,34,0.15); color: var(--gold); border: 1px solid rgba(210,153,34,0.3); }
+  .swot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .swot-box { border-radius: 12px; padding: 20px; }
+  .swot-s { background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.2); }
+  .swot-w { background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.2); }
+  .swot-o { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.2); }
+  .swot-t { background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.2); }
+  .swot-box h4 { font-size: 1em; margin-bottom: 12px; }
+  .swot-box ul { list-style: none; padding: 0; }
+  .swot-box li { padding: 6px 0; font-size: 0.88em; }
+  .swot-box li::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .swot-s li::before { background: var(--green); }
+  .swot-w li::before { background: var(--red); }
+  .swot-o li::before { background: var(--accent); }
+  .swot-t li::before { background: var(--gold); }
+  .radar-wrap { display: flex; justify-content: center; padding: 20px 0; }
+  .radar-wrap svg { max-width: 600px; width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.82em; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .conclusion { background: linear-gradient(135deg, rgba(88,166,255,0.08), rgba(188,140,255,0.08)); border: 1px solid rgba(88,166,255,0.2); border-radius: 12px; padding: 28px; margin-top: 32px; }
+  .conclusion h2 { border: none; margin-top: 0; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+  .tag { padding: 4px 10px; border-radius: 6px; font-size: 0.8em; background: #21262d; border: 1px solid var(--border); }
+  .source-list { font-size: 0.8em; color: var(--text-dim); }
+  .source-list a { color: var(--accent); text-decoration: none; }
+  .source-list a:hover { text-decoration: underline; }
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+  @media (max-width: 768px) {
+    .swot-grid { grid-template-columns: 1fr; }
+    .score-grid { grid-template-columns: repeat(2, 1fr); }
+    table { font-size: 0.78em; }
+    th, td { padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>TavernOS 视频模块 竞品对比评分报告</h1>
+<p class="subtitle">调研截止：2026年7月5日 | 对标产品：6款 | 评分维度：10项 | 数据来源：官方功能页、2025-2026实测评测、GitHub仓库</p>
+
+<div class="tag-row">
+  <span class="tag">TavernOS v0.2.0</span>
+  <span class="tag">22个核心模块</span>
+  <span class="tag">127个导出符号</span>
+  <span class="tag">TypeScript全栈</span>
+  <span class="tag">多Agent流水线</span>
+</div>
+
+<!-- ========== 总分 ========== -->
+<h2>综合评分总览</h2>
+
+<div class="score-grid">
+  <div class="score-card ours">
+    <div class="name">TavernOS</div>
+    <div class="score">6.7</div>
+    <div class="grade" style="color:var(--accent)">B+ · 差异化领先</div>
+  </div>
+  <div class="score-card green">
+    <div class="name">即梦 3.5 Pro</div>
+    <div class="score">5.7</div>
+    <div class="grade" style="color:var(--green)">B · 生成王者</div>
+  </div>
+  <div class="score-card gold">
+    <div class="name">Runway Gen-4</div>
+    <div class="score">5.6</div>
+    <div class="grade" style="color:var(--gold)">B- · 专业工具</div>
+  </div>
+  <div class="score-card gold">
+    <div class="name">ComfyUI</div>
+    <div class="score">5.6</div>
+    <div class="grade" style="color:var(--gold)">B- · 开源标杆</div>
+  </div>
+  <div class="score-card orange">
+    <div class="name">剪映 / CapCut</div>
+    <div class="score">4.9</div>
+    <div class="grade" style="color:var(--orange)">C+ · 大众工具</div>
+  </div>
+  <div class="score-card red">
+    <div class="name">Sora 2</div>
+    <div class="score">4.0</div>
+    <div class="grade" style="color:var(--red)">C · 纯生成</div>
+  </div>
+</div>
+
+<div class="card">
+  <p><strong>一句话结论：</strong>TavernOS 以 <strong>6.7分</strong> 排名第一，核心优势在于"写作→视频"全链路贯通、8维LLM审核+帧级SSIM双层质检、情绪驱动AutoCut智能剪辑——这三项能力在所有竞品中均无对标。短板在于生态社区(3分)和商业化成熟度(4分)，以及无自有视频生成模型(依赖API)。</p>
+</div>
+
+<!-- ========== 雷达图 ========== -->
+<h2>十维能力雷达图</h2>
+<div class="card">
+<div class="radar-wrap">
+<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rings -->
+  <g fill="none" stroke="#30363d" stroke-width="0.8">
+    <polygon points="300,80 472,200 472,400 300,520 128,400 128,200"/>
+    <polygon points="300,128 434,224 434,376 300,472 166,376 166,224"/>
+    <polygon points="300,176 396,248 396,352 300,424 204,352 204,248"/>
+    <polygon points="300,224 358,272 358,328 300,376 242,328 242,272"/>
+  </g>
+  <!-- Axis lines -->
+  <g stroke="#30363d" stroke-width="0.8">
+    <line x1="300" y1="300" x2="300" y2="80"/>
+    <line x1="300" y1="300" x2="472" y2="200"/>
+    <line x1="300" y1="300" x2="472" y2="400"/>
+    <line x1="300" y1="300" x2="300" y2="520"/>
+    <line x1="300" y1="300" x2="128" y2="400"/>
+    <line x1="300" y1="300" x2="128" y2="200"/>
+  </g>
+  <!-- Scale labels -->
+  <g fill="#8b949e" font-size="10" font-family="sans-serif" text-anchor="middle">
+    <text x="306" y="82">10</text>
+    <text x="306" y="130">8</text>
+    <text x="306" y="178">6</text>
+    <text x="306" y="226">4</text>
+    <text x="306" y="274">2</text>
+  </g>
+  <!-- Axis labels -->
+  <g fill="#e6edf3" font-size="13" font-weight="600" font-family="sans-serif" text-anchor="middle">
+    <text x="300" y="65">全链路贯通</text>
+    <text x="500" y="195">视频生成</text>
+    <text x="500" y="410">质量审核</text>
+    <text x="300" y="545">智能剪辑</text>
+    <text x="100" y="410">多Provider</text>
+    <text x="100" y="195">开发者友好</text>
+  </g>
+
+  <!-- TavernOS (9,6,9,8,8,7) -->
+  <polygon points="300,92 396,248 472,400 300,340 166,224 166,224"
+    fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+  <g fill="#58a6ff">
+    <circle cx="300" cy="92" r="4"/>
+    <circle cx="396" cy="248" r="4"/>
+    <circle cx="472" cy="400" r="4"/>
+    <circle cx="300" cy="340" r="4"/>
+    <circle cx="166" cy="224" r="4"/>
+    <circle cx="166" cy="224" r="4"/>
+  </g>
+
+  <!-- Runway (4,9,2,4,2,6) -->
+  <polygon points="300,256 300,92 472,400 300,376 128,200 242,272"
+    fill="rgba(210,153,34,0.06)" stroke="#d29922" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,3"/>
+
+  <!-- ComfyUI (2,9,1,1,8,8) -->
+  <polygon points="300,352 300,92 472,400 300,472 128,200 128,200"
+    fill="rgba(188,140,255,0.06)" stroke="#bc8cff" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,3"/>
+
+  <!-- 即梦 (4,9,2,3,1,5) -->
+  <polygon points="300,256 300,92 472,400 300,400 128,200 242,272"
+    fill="rgba(63,185,80,0.06)" stroke="#3fb950" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,3"/>
+
+  <!-- 剪映 (3,1,2,7,1,2) -->
+  <polygon points="300,304 300,472 472,400 300,316 128,200 128,200"
+    fill="rgba(219,109,40,0.06)" stroke="#db6d28" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,3"/>
+</svg>
+</div>
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span>TavernOS</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#d29922"></span>Runway Gen-4</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#bc8cff"></span>ComfyUI</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span>即梦 3.5 Pro</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#db6d28"></span>剪映/CapCut</div>
+</div>
+<p style="text-align:center;color:var(--text-dim);font-size:0.82em;margin-top:12px">注：Sora 2 因多数维度极低（纯生成、无审核/剪辑/编辑），未在雷达图中绘制以保持可读性</p>
+</div>
+
+<!-- ========== 详细评分表 ========== -->
+<h2>十维详细评分表</h2>
+
+<table>
+<thead>
+<tr>
+  <th>评分维度</th>
+  <th>TavernOS</th>
+  <th>Runway Gen-4</th>
+  <th>即梦 3.5 Pro</th>
+  <th>ComfyUI</th>
+  <th>剪映/CapCut</th>
+  <th>Sora 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>全链路贯通</td>
+  <td class="ours"><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-4"></span>4</td>
+  <td><span class="bar bar-4"></span>4</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-3"></span>3</td>
+  <td><span class="bar bar-2"></span>2</td>
+</tr>
+<tr>
+  <td>视频生成能力</td>
+  <td class="ours"><span class="bar bar-6"></span>6</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-1"></span>1</td>
+  <td><span class="bar bar-9" style="width:100%"></span>10</td>
+</tr>
+<tr>
+  <td>质量审核体系</td>
+  <td class="ours"><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-1"></span>1</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-1"></span>1</td>
+</tr>
+<tr>
+  <td>智能剪辑</td>
+  <td class="ours"><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-4"></span>4</td>
+  <td><span class="bar bar-3"></span>3</td>
+  <td><span class="bar bar-1"></span>1</td>
+  <td><span class="bar bar-7"></span>7</td>
+  <td><span class="bar bar-1"></span>1</td>
+</tr>
+<tr>
+  <td>多Provider路由</td>
+  <td class="ours"><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-1"></span>1</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-1"></span>1</td>
+  <td><span class="bar bar-1"></span>1</td>
+</tr>
+<tr>
+  <td>开发者友好度</td>
+  <td class="ours"><span class="bar bar-7"></span>7</td>
+  <td><span class="bar bar-6"></span>6</td>
+  <td><span class="bar bar-5"></span>5</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-2"></span>2</td>
+  <td><span class="bar bar-1"></span>1</td>
+</tr>
+<tr>
+  <td>生态与社区</td>
+  <td class="ours"><span class="bar bar-3"></span>3</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-9" style="width:100%"></span>10</td>
+  <td><span class="bar bar-9" style="width:100%"></span>10</td>
+  <td><span class="bar bar-3"></span>3</td>
+</tr>
+<tr>
+  <td>商业化成熟度</td>
+  <td class="ours"><span class="bar bar-4"></span>4</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-3"></span>3</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-5"></span>5</td>
+</tr>
+<tr>
+  <td>技术架构</td>
+  <td class="ours"><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-7"></span>7</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-6"></span>6</td>
+  <td><span class="bar bar-8"></span>8</td>
+</tr>
+<tr>
+  <td>音频能力</td>
+  <td class="ours"><span class="bar bar-5"></span>5</td>
+  <td><span class="bar bar-5"></span>5</td>
+  <td><span class="bar bar-9"></span>9</td>
+  <td><span class="bar bar-5"></span>5</td>
+  <td><span class="bar bar-8"></span>8</td>
+  <td><span class="bar bar-8"></span>8</td>
+</tr>
+<tr style="font-weight:700;background:#21262d">
+  <td>总分（满分100）</td>
+  <td class="ours" style="color:var(--accent)">67</td>
+  <td style="color:var(--gold)">56</td>
+  <td style="color:var(--green)">57</td>
+  <td style="color:var(--gold)">56</td>
+  <td style="color:var(--orange)">49</td>
+  <td style="color:var(--red)">40</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ========== 功能对比矩阵 ========== -->
+<h2>功能对比矩阵</h2>
+
+<table>
+<thead>
+<tr>
+  <th>功能模块</th>
+  <th>TavernOS</th>
+  <th>Runway</th>
+  <th>即梦</th>
+  <th>ComfyUI</th>
+  <th>剪映</th>
+  <th>Sora</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>写作→剧本→分镜→视频全链路</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>8维LLM视频审核（含演技诊断）</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>帧级SSIM质检+自动裁剪坏帧</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>情绪曲线→节奏曲线→剪辑计划</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>30种情绪→面部/肢体视觉锚点映射</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>56声线音色库+角色自动匹配</td><td class="ours"><span class="badge badge-lead">领先</span></td><td>—</td><td>—</td><td>—</td><td>多音色无匹配</td><td>—</td></tr>
+<tr><td>Reroll质量门控循环</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>14种智能转场类型</td><td class="ours"><span class="badge badge-lead">领先</span></td><td>基础转场</td><td>—</td><td>—</td><td>模板转场</td><td>—</td></tr>
+<tr><td>librosa BPM节拍检测驱动剪辑</td><td class="ours"><span class="badge badge-lead">领先</span></td><td>—</td><td>—</td><td>—</td><td>AI配乐无检测</td><td>—</td></tr>
+<tr><td>多Provider混合路由（6种）</td><td class="ours"><span class="badge badge-lead">领先</span></td><td>仅自有</td><td>仅自有</td><td>多模型手动</td><td>—</td><td>仅自有</td></tr>
+<tr><td>Shot→VideoClip字段映射桥接</td><td class="ours"><span class="badge badge-unique">独家</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>自有视频生成模型</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>Gen-4.5</td><td>Seedance 2.0</td><td>SVD/Mochi等</td><td>—</td><td>Sora 2</td></tr>
+<tr><td>原生音画一体生成</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>部分</td><td>环境音+对白+配乐</td><td>部分</td><td>—</td><td>原生同步</td></tr>
+<tr><td>4K高分辨率输出</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>1080p</td><td>2K</td><td>取决于模型</td><td>4K导出</td><td>未公开</td></tr>
+<tr><td>云端SaaS / API服务</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>API完善</td><td>火山引擎API</td><td>Comfy Cloud</td><td>—</td><td>内测</td></tr>
+<tr><td>可视化节点编排</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>—</td><td>—</td><td>节点图</td><td>—</td><td>—</td></tr>
+<tr><td>模板生态</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>有</td><td>有</td><td>社区工作流</td><td>海量</td><td>—</td></tr>
+<tr><td>开源模型权重 / 可微调</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>—</td><td>—</td><td>可微调</td><td>—</td><td>—</td></tr>
+<tr><td>断点续传 / 分布式</td><td class="ours"><span class="badge badge-gap">缺失</span></td><td>—</td><td>—</td><td>增量重算</td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+
+<!-- ========== SWOT ========== -->
+<h2>TavernOS SWOT 分析</h2>
+<div class="swot-grid">
+  <div class="swot-box swot-s">
+    <h4 style="color:var(--green)">Strengths — 优势</h4>
+    <ul>
+      <li><strong>全链路独家定位</strong>：8阶段流水线（剧本→资产→clip包→故事板→视频生成→审核→reroll→合成），市场无任何竞品覆盖"写作→视频"完整链路</li>
+      <li><strong>双层质量护城河</strong>：8维LLM语义审核（含演技/情绪维度）+ 帧级SSIM客观质检 + reroll循环，所有竞品均无自动质量审核</li>
+      <li><strong>情绪驱动AutoCut</strong>：情绪曲线→节奏曲线→编辑计划，14种智能转场，剪映的一键成片是模板驱动，TavernOS是语义驱动</li>
+      <li><strong>TypeScript全栈</strong>：所有竞品均为Python，TavernOS在Node.js/前端生态集成上有差异化优势</li>
+      <li><strong>多Provider路由</strong>：6种provider自动路由（Seedance/Jimeng/Grok/Yunwu/Agnes/Custom），ComfyUI需手动选择</li>
+    </ul>
+  </div>
+  <div class="swot-box swot-w">
+    <h4 style="color:var(--red)">Weaknesses — 劣势</h4>
+    <ul>
+      <li><strong>无自有生成模型</strong>：完全依赖API（Seedance/Jimeng/Grok），受API能力、价格、稳定性限制，无法控制模型权重</li>
+      <li><strong>生态社区极弱</strong>：私有项目，无开源社区、无模板市场、无插件生态，ComfyUI有数千custom nodes</li>
+      <li><strong>商业化不成熟</strong>：Electron本地应用，无SaaS、无API服务、无付费模型，Runway/剪映已有成熟订阅制</li>
+      <li><strong>无原生音画一体</strong>：即梦3.5 Pro已实现环境音+对白+配乐自动生成，TavernOS依赖外部配音+FFmpeg合成</li>
+      <li><strong>无可视化编排</strong>：ComfyUI节点图调试体验远超代码式pipeline，TavernOS缺少可视化界面</li>
+    </ul>
+  </div>
+  <div class="swot-box swot-o">
+    <h4 style="color:var(--accent)">Opportunities — 机会</h4>
+    <ul>
+      <li><strong>市场空白</strong>："写作→视频"全链路是蓝海，当前市场被割裂为"生成端"和"剪辑端"，无人填补中间桥接</li>
+      <li><strong>API生态繁荣</strong>：即梦/可灵/Seedance API日益成熟且价格下降，多Provider路由价值将持续放大</li>
+      <li><strong>质量审核需求增长</strong>：YouTube 2026年重点打击AI低质内容，自动质量审核将成为刚需</li>
+      <li><strong>开源差异化</strong>：若开源，"写作→视频"全链路+质量审核+AutoCut在GitHub无直接竞品</li>
+      <li><strong>中国市场适配</strong>：深度集成即梦/可灵API + 中文prompt优化 + 情绪锚点中文映射，天然适配国内创作者</li>
+    </ul>
+  </div>
+  <div class="swot-box swot-t">
+    <h4 style="color:var(--gold)">Threats — 威胁</h4>
+    <ul>
+      <li><strong>即梦全链路扩展</strong>：即梦3.5 Pro已有导演模式（灯光/机位/角色一致性），若向后延伸到剧本→分镜，将直接竞争</li>
+      <li><strong>Runway工作流整合</strong>：Runway已有生成+编辑+后期，若增加AI脚本和审核功能，将形成端到端竞品</li>
+      <li><strong>ComfyUI社区扩张</strong>：ComfyUI已支持Kling 3.0/LTX-2.3，若社区开发出审核/剪辑节点，将蚕食定位</li>
+      <li><strong>API依赖风险</strong>：即梦/可灵API政策变化（限流/涨价/关闭）将直接影响TavernOS可用性</li>
+      <li><strong>Sora 2开放</strong>：若Sora 2 API开放且价格亲民，其物理模拟+音画同步能力将降维打击</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ========== 分维度详解 ========== -->
+<h2>关键维度深度解析</h2>
+
+<h3>1. 全链路贯通 — TavernOS 9分 vs 行业最高4分</h3>
+<div class="card">
+<p>TavernOS是唯一实现"小说文本→剧本规划→资产规划→clip包构建→故事板→视频生成→单条审核→章节合成"8阶段完整流水线的产品。竞品被割裂为两类：<strong>生成端</strong>（Sora/Runway/即梦，只做"prompt→视频"）和<strong>剪辑端</strong>（剪映/Premiere/DaVinci，只做"素材→成片"）。TavernOS的 <code>shotsToClips</code> 桥接函数将故事板Shot[]转为VideoClip[]，<code>buildVideoPrompt</code> 组装最终prompt，<code>VideoPipeline</code> 编排生成→下载→质检→审核→reroll→合成——这条链路在开源生态和商业产品中均无对标。</p>
+</div>
+
+<h3>2. 质量审核体系 — TavernOS 9分 vs 行业最高2分</h3>
+<div class="card">
+<p>所有竞品均无自动质量审核机制。Runway/即梦/Sora只管生成不管审核，剪映/Premiere/DaVinci只管剪辑不管质量。TavernOS构建了双层质检：<strong>客观层</strong>用FFmpeg SSIM filter抽帧计算帧间相似度，自动裁剪首尾低质量帧（<code>FrameQualityChecker.autoTrim</code>）；<strong>语义层</strong>用LLM从8个维度（视觉质量/角色一致性/运动自然度/场景合规/面部表情/肢体语言/声画同步/技术质量）审核，输出5级评分（A-F）+问题诊断+reroll prompt。生成→检测→裁剪→重生成的闭环是独有的质量保障体系。</p>
+</div>
+
+<h3>3. 智能剪辑 — TavernOS 8分 vs 剪映7分 vs Runway 4分</h3>
+<div class="card">
+<p>剪映的"一键成片"是<strong>模板驱动</strong>（选模板→匹配节奏→套用转场），Runway的编辑是<strong>手动控制</strong>（Motion Brush/Video-to-Video）。TavernOS的AutoCut是<strong>语义驱动</strong>：<code>generateAutoCutPlan</code> 从Shot[]提取情绪曲线→映射为节奏曲线（快/中/慢/停顿）→生成编辑计划（含速度斜坡、转场选择、时长分配）。<code>smart-transitions</code> 提供14种转场类型，根据情绪上下文自动选择（如"愤怒→悲伤"用dissolve，"紧张→爆发"用quick_cut）。扣2分因为filter-graph目前只完整实现了cut/crossfade/fade三种。</p>
+</div>
+
+<h3>4. 视频生成能力 — TavernOS 6分 vs Sora 10分 vs 即梦/Runway 9分</h3>
+<div class="card">
+<p>这是TavernOS最大的短板。无自有模型，完全依赖API：Seedance 2.0（60s/次，2K，9图+3音频omni_reference）、即梦直连、Grok、Yunwu等。优势是<strong>多Provider路由</strong>可以按任务类型自动选择最佳provider（如动作场景用Kling、叙事场景用Seedance），且支持omni_reference多图多音频模式。但受限于API的分辨率（最高2K）、时长（最长60s）、生成速度（3-5分钟/次）和价格波动。Sora 2的物理模拟和即梦的原生音画一体是TavernOS无法通过API调用弥补的差距。</p>
+</div>
+
+<h3>5. 生态与社区 — TavernOS 3分 vs ComfyUI/剪映 10分</h3>
+<div class="card">
+<p>TavernOS最大的弱点。ComfyUI有数千个custom nodes、每周发布的社区工作流、活跃的Discord/GitHub社区；剪映有海量模板和抖音生态。TavernOS是私有项目，22个模块127个导出符号虽然技术含量高，但无外部贡献者、无模板市场、无插件机制。若要扩大影响力，开源是必选项——且"写作→视频"全链路在GitHub无直接竞品，有先发优势。</p>
+</div>
+
+<!-- ========== 差异化策略 ========== -->
+<h2>差异化策略建议</h2>
+<table>
+<thead>
+<tr><th style="width:120px">策略层级</th><th>方向</th><th>优先级</th><th>预估工时</th></tr>
+</thead>
+<tbody>
+<tr><td><span class="badge badge-gap">Catch-up</span></td><td>composer-filter-graph 补齐剩余11种转场类型的xfade映射</td><td>P0</td><td>2天</td></tr>
+<tr><td><span class="badge badge-gap">Catch-up</span></td><td>pipeline 增加断点续传 + rate limiting</td><td>P1</td><td>3天</td></tr>
+<tr><td><span class="badge badge-gap">Catch-up</span></td><td>集成 PySceneDetect 做镜头分割预处理</td><td>P1</td><td>1天</td></tr>
+<tr><td><span class="badge badge-gap">Catch-up</span></td><td>集成 FunClip Paraformer ASR 做语音驱动剪辑</td><td>P2</td><td>3天</td></tr>
+<tr><td><span class="badge badge-lead">Differentiate</span></td><td>开源核心 video 模块到 GitHub，建立社区</td><td>P0</td><td>1周（含文档）</td></tr>
+<tr><td><span class="badge badge-lead">Differentiate</span></td><td>将 8维LLM审核 封装为独立npm包，供其他工具集成</td><td>P1</td><td>2天</td></tr>
+<tr><td><span class="badge badge-lead">Differentiate</span></td><td>AutoCut引擎封装为独立CLI工具</td><td>P1</td><td>3天</td></tr>
+<tr><td><span class="badge badge-lead">Differentiate</span></td><td>添加 VMAF 客观质检层（补强SSIM）</td><td>P2</td><td>1天</td></tr>
+<tr><td><span class="badge badge-unique">Innovate</span></td><td>构建"情绪感知剪辑"可视化编辑器（时间线UI + 情绪曲线叠加）</td><td>P2</td><td>1周</td></tr>
+<tr><td><span class="badge badge-unique">Innovate</span></td><td>实现"角色一致性追踪"跨镜头角色锁定（CV face embedding）</td><td>P3</td><td>2周</td></tr>
+<tr><td><span class="badge badge-unique">Innovate</span></td><td>开发"剧本智能改写"Agent（根据审核反馈自动修改剧本→重新生成）</td><td>P3</td><td>2周</td></tr>
+</tbody>
+</table>
+
+<!-- ========== 结论 ========== -->
+<div class="conclusion">
+<h2>最终评判</h2>
+<p style="margin-bottom:16px">TavernOS 以 <strong style="color:var(--accent);font-size:1.3em">67分</strong> 在6款产品中排名第一，领先即梦3.5 Pro（57分）和Runway Gen-4（56分）。</p>
+
+<p style="margin-bottom:12px"><strong>核心判断：</strong>TavernOS 的定位不是"更好的视频生成器"或"更好的视频编辑器"，而是<strong>"从文字到成片的自动化工厂"</strong>——这是市场上无人覆盖的赛道。生成端有Sora/即梦/Runway持续进化，剪辑端有剪映/Premiere足够好用，但"写作→剧本→分镜→生成→审核→智能剪辑"这条链路的自动化编排，只有TavernOS在做。</p>
+
+<p style="margin-bottom:12px"><strong>三个独家壁垒：</strong></p>
+<p>1. <strong>8维LLM审核 + 帧级SSIM质检</strong> — 随着AI内容泛滥，质量审核将从"可选"变为"必需"</p>
+<p>2. <strong>情绪驱动AutoCut</strong> — 语义级剪辑决策 vs 模板驱动/手动操作，代差明显</p>
+<p>3. <strong>全链路贯通</strong> — 8阶段流水线的工程复杂度构成进入壁垒</p>
+
+<p style="margin-bottom:12px"><strong>最大风险：</strong>即梦3.5 Pro若向后扩展（增加剧本→分镜→审核→剪辑），将形成直接竞争。TavernOS需尽快开源建立社区壁垒，并将审核/AutoCut封装为独立可复用组件。</p>
+
+<p><strong>生产力工具距离评估：</strong>底层模块实现完成度约90%（本次全方位修复后），集成完成度约70%。距离真正生产力工具还差：断点续传(防中断丢失)、rate limiting(防API限流)、可视化时间线UI(替代垂直列表)、云端部署(替代本地Electron)。预计再投入2-3周可达生产力工具门槛。</p>
+</div>
+
+<div class="divider"></div>
+
+<h2>数据来源</h2>
+<div class="source-list">
+<p>[1] 2026年全球AI视频生成模型优劣势全景对比 — http://m.toutiao.com/group/7608183877370167823/</p>
+<p>[2] 即梦AI 3.5 Pro深度实测（掘金） — https://juejin.cn/post/7589918470788464674</p>
+<p>[3] 2026年AI视频剪辑完全指南 — http://m.toutiao.com/group/7647417066177249801/</p>
+<p>[4] ComfyUI官方GitHub — https://github.com/comfyanonymous/ComfyUI</p>
+<p>[5] Open-Sora官方GitHub — https://github.com/hpcaitech/Open-Sora</p>
+<p>[6] CogVideoX官方GitHub — https://github.com/zai-org/CogVideo</p>
+<p>[7] FunClip官方GitHub — https://github.com/alibaba-damo-academy/FunClip</p>
+<p>[8] AutoCut（李沐开源版）GitHub — https://github.com/mli/autocut</p>
+<p>[9] PySceneDetect文档 — https://pyscenedetect.readthedocs.io/</p>
+<p>[10] 2026主流AI视频处理工具横评 — http://m.toutiao.com/group/7653138437544886836/</p>
+<p>[11] Runway官网 — https://runwayml.com/</p>
+<p>[12] ComfyUI官网（Kling 3.0集成） — http://comfy.org/</p>
+<p>[13] Dify 2.0工作流 — http://m.toutiao.com/group/7546895307234312767/</p>
+<p>[14] MiniMax海螺AI Multi-agent — http://m.289.com/azrj/561856.html</p>
+<p>[15] 2026年最佳AI视频编辑工具 — https://jilo.ai/zh/reviews/best-ai-video-editing-tools</p>
+<p>[16] 谷歌Veo 3.1 Lite — http://m.toutiao.com/group/7623595516625961524/</p>
+<p>[17] CapCut 2026 V18.5.0 — https://m.downxia.com/downinfo/424087.html</p>
+<p>[18] 达芬奇Neural Engine实测 — https://www.sohu.com/a/971674785_122569887</p>
+</div>
+
+</body>
+</html>

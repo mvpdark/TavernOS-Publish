@@ -26,7 +26,7 @@ export interface ConsistencyCheckResult {
     readonly suggestion?: string;
 }
 /** Configuration for the consistency checker. */
-export interface ConsistencyCheckerConfig {
+export interface SentinelConfig {
     /** Minimum score (0–100) for a frame to pass. Default 80. */
     readonly threshold: number;
     /** Whether to use feature-vector comparison. Default true. */
@@ -35,7 +35,7 @@ export interface ConsistencyCheckerConfig {
     readonly vectorSimilarityThreshold: number;
 }
 /** Default configuration values. */
-export declare const DEFAULT_CONSISTENCY_CONFIG: ConsistencyCheckerConfig;
+export declare const DEFAULT_CONSISTENCY_CONFIG: SentinelConfig;
 /**
  * Abstraction over a face-embedding service.
  *
@@ -82,7 +82,7 @@ export declare class StubFaceEmbeddingProvider implements FaceEmbeddingProvider 
  * This class also provides static prompt-generation helpers for creating
  * three-view reference sheets and individual reference images.
  */
-export declare class CharacterConsistencyChecker {
+export declare class CharacterSentinel {
     private readonly library;
     private readonly config;
     private readonly provider;
@@ -92,7 +92,7 @@ export declare class CharacterConsistencyChecker {
      * @param provider Face-embedding provider. Defaults to
      *   {@link StubFaceEmbeddingProvider} (which returns empty vectors).
      */
-    constructor(library: CharacterLibrary, config?: Partial<ConsistencyCheckerConfig>, provider?: FaceEmbeddingProvider);
+    constructor(library: CharacterLibrary, config?: Partial<SentinelConfig>, provider?: FaceEmbeddingProvider);
     /**
      * Check a single video frame against a character's reference assets.
      *

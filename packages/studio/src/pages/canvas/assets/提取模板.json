@@ -1,0 +1,228 @@
+{
+  "agent": {
+    "id": "novel_to_storyboard_agent",
+    "name": "小说转脚本分镜Agent",
+    "version": "1.0.0",
+    "language": "zh-CN",
+    "description": "将小说原文转换为可视化脚本，并提取人物、场景、物品，最终生成分镜结构。"
+  },
+  "input": {
+    "type": "chapter_text",
+    "required_fields": [
+      "chapter_title",
+      "chapter_text"
+    ],
+    "optional_fields": [
+      "chapter_number",
+      "world_setting",
+      "character_bible",
+      "visual_style",
+      "target_duration_sec"
+    ]
+  },
+  "objectives": [
+    "准确提取文中出现或被明确提及的人物",
+    "准确提取实体场景与信息场景",
+    "提取具有叙事价值或视觉焦点价值的物品",
+    "将原文拆解为剧情节拍",
+    "将剧情节拍改写为影视化脚本",
+    "按照镜头语言生成分镜",
+    "默认单个分镜时长约15秒，但可根据节奏动态调整"
+  ],
+  "pipeline": [
+    {
+      "step": 1,
+      "name": "extract_characters",
+      "output_key": "characters"
+    },
+    {
+      "step": 2,
+      "name": "extract_scenes",
+      "output_key": "scenes"
+    },
+    {
+      "step": 3,
+      "name": "extract_props",
+      "output_key": "props"
+    },
+    {
+      "step": 4,
+      "name": "extract_beats",
+      "output_key": "beats"
+    },
+    {
+      "step": 5,
+      "name": "generate_script",
+      "output_key": "script"
+    },
+    {
+      "step": 6,
+      "name": "generate_storyboard",
+      "output_key": "storyboard"
+    }
+  ],
+  "rules": {
+    "character_rules": {
+      "include_if": [
+        "角色在正文中实际出场",
+        "角色被明确提及且对当前段落有叙事作用",
+        "角色虽未正面登场，但构成画面或冲突中的有效存在"
+      ],
+      "merge_aliases": true,
+      "resolve_pronouns": true,
+      "required_fields": [
+        "id",
+        "name",
+        "aliases",
+        "gender",
+        "age_range",
+        "role",
+        "importance",
+        "traits",
+        "appearance_hint",
+        "current_emotion",
+        "current_action",
+        "is_on_stage"
+      ]
+    },
+    "scene_rules": {
+      "new_scene_when": [
+        "地点发生变化",
+        "室内外发生变化",
+        "时间发生明显变化",
+        "叙事视角切入新的可视化空间",
+        "信息空间成为独立画面主体"
+      ],
+      "scene_types": [
+        "实体场景",
+        "信息场景",
+        "回忆场景",
+        "想象场景"
+      ],
+      "required_fields": [
+        "id",
+        "name",
+        "type",
+        "location",
+        "time",
+        "mood",
+        "environment",
+        "characters_present",
+        "key_props"
+      ]
+    },
+    "prop_rules": {
+      "include_if": [
+        "物品被角色使用",
+        "物品推动剧情",
+        "物品形成画面焦点",
+        "物品承载信息",
+        "物品强化氛围或人物状态"
+      ],
+      "exclude_if": [
+        "纯背景且无叙事作用的普通名词",
+        "无法形成视觉重点的泛化描述"
+      ],
+      "required_fields": [
+        "id",
+        "name",
+        "type",
+        "owner",
+        "scene_ids",
+        "importance",
+        "is_used",
+        "narrative_function"
+      ]
+    },
+    "beat_rules": {
+      "split_on": [
+        "动作变化",
+        "情绪转折",
+        "人物关系变化",
+        "场景变化",
+        "信息揭示",
+        "冲突升级",
+        "对白主导权变化"
+      ],
+      "required_fields": [
+        "id",
+        "scene_id",
+        "summary",
+        "characters",
+        "props",
+        "emotion_shift",
+        "dramatic_function",
+        "estimated_duration_sec"
+      ]
+    },
+    "script_rules": {
+      "style": "影视化、可拍摄、避免纯文学化表述",
+      "must_visualize": true,
+      "required_fields": [
+        "scene_id",
+        "scene_heading",
+        "action",
+        "dialogue",
+        "voice_over",
+        "sound",
+        "dramatic_purpose"
+      ]
+    },
+    "storyboard_rules": {
+      "default_duration_sec": 15,
+      "min_duration_sec": 5,
+      "max_duration_sec": 20,
+      "split_priority": [
+        "场景变化",
+        "动作变化",
+        "情绪变化",
+        "对白节奏",
+        "悬念节点"
+      ],
+      "required_fields": [
+        "shot_id",
+        "scene_id",
+        "beat_id",
+        "duration_sec",
+        "shot_size",
+        "camera_move",
+        "angle",
+        "subject",
+        "action",
+        "expression",
+        "props",
+        "visual_description",
+        "dialogue_or_vo",
+        "sound_design",
+        "shot_purpose"
+      ]
+    }
+  },
+  "output_order": [
+    "characters",
+    "scenes",
+    "props",
+    "beats",
+    "script",
+    "storyboard"
+  ],
+  "consistency_checks": [
+    "同一人物在不同字段中的名称必须统一",
+    "代称必须回指到明确人物",
+    "场景中的人物和物品必须能对应到上游抽取结果",
+    "分镜中的人物、场景、物品必须引用已存在的ID",
+    "镜头描述必须可视化，不能只写抽象心理",
+    "分镜总时长应与剧情体量基本匹配"
+  ],
+  "fallback_strategy": {
+    "when_info_missing": [
+      "允许做最小必要补全",
+      "不得擅自新增重大剧情",
+      "不得给无名路人强行升格为核心角色"
+    ],
+    "when_ambiguous": [
+      "标记 uncertainty",
+      "保留多个候选解释时优先选最保守方案"
+    ]
+  }
+}

@@ -272,20 +272,25 @@ export declare const ShotListSchema: z.ZodObject<{
     }[];
 }>;
 export declare const ShotAspectRatioSchema: z.ZodEnum<["16:9", "9:16", "1:1"]>;
+/** Options for LLM calls (abort/timeout passthrough). */
+export interface StoryboardCallOptions {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+}
 export interface StoryboardAgent {
     script(params: {
         chapterText: string;
         assets: StoryboardAssetCatalog;
-    }): Promise<StoryboardScript>;
+    }, options?: StoryboardCallOptions): Promise<StoryboardScript>;
     splitShots(params: {
         script: StoryboardScript;
         assets: StoryboardAssetCatalog;
         maxDuration?: number;
-    }): Promise<ShotList>;
+    }, options?: StoryboardCallOptions): Promise<ShotList>;
     reviewShots(params: {
         chapterText: string;
         shots: ShotList;
-    }): Promise<ShotReviewResult>;
+    }, options?: StoryboardCallOptions): Promise<ShotReviewResult>;
 }
 export declare function createStoryboardAgent(ctx: AgentContext): StoryboardAgent;
 //# sourceMappingURL=storyboard.d.ts.map

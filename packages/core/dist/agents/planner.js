@@ -1,9 +1,0 @@
-import{loadPrompt as S}from"../prompts/loader.js";import{createAgentRuntime as x}from"./base.js";import{parseSections as C,extractPromptMessages as k}from"./json-utils.js";export const STALE_THREAD_THRESHOLD=5;export function findStaleThreads(o,e,r=STALE_THREAD_THRESHOLD){return o.filter(s=>s.status!=="resolved"&&e-s.lastAdvancedChapter>=r)}export function formatPlotThreads(o){return o.length===0?"\u65E0\u4F0F\u7B14\u7EBF\u7D22":o.map(e=>{const r=[`- [${e.status}] ${e.hookId}: ${e.type}`,`\u8D77\u59CB:\u7B2C${e.startChapter}\u7AE0`,`\u6700\u540E\u63A8\u8FDB:\u7B2C${e.lastAdvancedChapter}\u7AE0`];return e.expectedPayoff&&r.push(`\u9884\u671F\u56DE\u6536:${e.expectedPayoff}`),e.payoffTiming&&r.push(`\u56DE\u6536\u65F6\u673A:${e.payoffTiming}`),e.notes&&r.push(`\u5907\u6CE8:${e.notes}`),r.join(", ")}).join(`
-`)}export function createPlanner(o){const e=x(o),r="planner";async function s(t,i){const n=findStaleThreads(t.plotThreads,t.currentChapter),p=formatPlotThreads(n),h=formatPlotThreads(t.plotThreads),f=await S("planner",{title:t.bookMeta.title,genre:t.bookMeta.genre,language:t.bookMeta.language,currentChapter:String(t.currentChapter),storyState:t.storyState,plotThreads:h,recentChapters:t.recentChapters,chapterGoal:t.chapterGoal,staleThreads:p}),{system:m,user:g}=k(f),d=[{role:"system",content:m},{role:"user",content:g}],T=await e.chat(d,i),c=C(T.content),u=c.get("storyBible")??t.storyState,y=c.get("currentState")??t.storyState,l=c.get("activeHooks")??"";let a;l&&n.length>0?a=`${l}
-
-## \u9700\u8981\u63A8\u8FDB\u7684\u9057\u6F0F\u4F0F\u7B14
-${p}`:l?a=l:n.length>0?a=`## \u9700\u8981\u63A8\u8FDB\u7684\u9057\u6F0F\u4F0F\u7B14
-${p}
-
-## \u5168\u90E8\u4F0F\u7B14
-${h}`:a=h;const $=c.get("chapterOutline")??t.chapterGoal;return{storyBible:u,currentState:y,activeHooks:a,chapterOutline:$,staleThreads:n}}return{name:r,plan:s}}

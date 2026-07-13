@@ -101,11 +101,15 @@ export function SelectField<T extends string>({
   value,
   onChange,
   options,
+  optionLabels,
 }: {
   label: string;
   value: T;
   onChange: (v: T) => void;
   options: readonly T[];
+  /** Optional display labels paired with options by index. When omitted, the
+   *  raw option value is shown. */
+  optionLabels?: readonly string[];
 }): JSX.Element {
   return (
     <div>
@@ -115,9 +119,9 @@ export function SelectField<T extends string>({
         onChange={(e) => onChange(e.target.value as T)}
         className={inputCls}
       >
-        {options.map((o) => (
+        {options.map((o, i) => (
           <option key={o} value={o}>
-            {o}
+            {optionLabels?.[i] ?? o}
           </option>
         ))}
       </select>
@@ -141,6 +145,7 @@ export function NumberField({
   max?: number;
 }): JSX.Element {
   const clamp = (raw: number): number => {
+    if (Number.isNaN(raw)) return min ?? 0;
     let v = raw;
     if (typeof min === "number" && v < min) v = min;
     if (typeof max === "number" && v > max) v = max;

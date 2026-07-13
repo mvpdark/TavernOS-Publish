@@ -1,3 +1,3 @@
-import{getTemplateById as p,recommendTemplates as m}from"./prompt-templates.js";export function enhancePromptWithTemplate(t){if(!t.templateId)return t.clip.prompt;const e=p(t.templateId);if(!e)return t.clip.prompt;const r=[t.clip.prompt];return e.visualPrompt&&!t.clip.prompt.includes(e.visualPrompt)&&r.push(e.visualPrompt),e.actingPrompt&&r.push(`\u8868\u6F14\u6307\u5BFC: ${e.actingPrompt}`),r.join(`
+import{getTemplateById as p,recommendTemplates as m}from"./prompt-templates.js";export function enhancePromptWithTemplate(e){if(!e.templateId)return e.clip.prompt;const t=p(e.templateId);if(!t)return e.clip.prompt;const r=[e.clip.prompt];return t.visualPrompt&&!e.clip.prompt.includes(t.visualPrompt)&&r.push(t.visualPrompt),t.actingPrompt&&r.push(`\u8868\u6F14\u6307\u5BFC: ${t.actingPrompt}`),r.join(`
 
-`)}export function getTemplateForShot(t){return m({emotion:t.emotion,sceneType:t.sceneType,characterCount:t.characterCount})[0]}
+`)}export function getTemplateForShot(e){return m({emotion:e.emotion,sceneType:e.sceneType,characterCount:e.characterCount,shotType:e.shotType,cameraMovement:e.cameraMovement})[0]}

@@ -16,7 +16,7 @@ export type { PersonaCard, CharactersResponse, TokenUsage, SSEDeltaEvent, SSEErr
 // --- Page-specific types ---
 
 /**
- * Chat message with swipe-style alternative generations.
+ * Chat message with SillyTavern-style swipes (alternative generations).
  *
  * `content` is always equal to `swipes[swipeIndex]` and is kept in sync
  * for convenience — components can read `msg.content` directly without

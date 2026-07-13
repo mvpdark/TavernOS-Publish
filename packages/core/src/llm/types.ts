@@ -74,12 +74,17 @@ export function createStreamTracker(
         clearInterval(timer);
         timer = undefined;
       }
-      onProgress?.({
-        elapsedMs: Date.now() - startTime,
-        totalChars,
-        chineseChars,
-        status: "done",
-      });
+      try {
+        onProgress?.({
+          elapsedMs: Date.now() - startTime,
+          totalChars,
+          chineseChars,
+          status: "done",
+        });
+      } catch {
+        // Swallow errors from user-supplied progress callback to avoid
+        // masking the original error and skipping resource cleanup.
+      }
     },
   };
 }

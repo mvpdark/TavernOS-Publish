@@ -1,0 +1,1 @@
+export const clipStateReducers={};export function createClipState(e,t,r,n){return{clip:e,ctx:t,stages:r,currentPrompt:e.prompt,attempt:0,maxAttempts:n.maxRerolls+1,review:void 0,passed:!1,shouldRetry:!1,consistencyScore:void 0,lipSyncApplied:void 0,error:void 0,status:"processing"}}

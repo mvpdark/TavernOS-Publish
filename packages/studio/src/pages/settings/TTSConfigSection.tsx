@@ -183,6 +183,7 @@ export default function TTSConfigSection(): JSX.Element | null {
             });
           }}
           options={providers.map((p) => p.id)}
+          optionLabels={providers.map((p) => p.name)}
         />
 
         {(() => {
@@ -193,6 +194,7 @@ export default function TTSConfigSection(): JSX.Element | null {
               value={config.model}
               onChange={(v) => setConfig({ ...config, model: v })}
               options={tp.models.map((m) => m.id)}
+              optionLabels={tp.models.map((m) => m.name)}
             />
           ) : (
             <TextInput

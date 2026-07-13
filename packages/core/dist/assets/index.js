@@ -1,1 +1,1 @@
-export{AssetKindSchema,AssetSchema,AssetCatalogSchema,emptyCatalog}from"./types.js";export{AssetCatalogManager}from"./catalog.js";export{assetToCard,assetToFilename,isAutoSyncedCard,mergeAssetIntoCard}from"./to-card.js";
+export{AssetKindSchema,AssetSchema,AssetCatalogSchema,emptyCatalog}from"./types.js";export{AssetCatalogManager,buildAssetRosterText}from"./catalog.js";export{assetToCard,assetToFilename,isAutoSyncedCard,mergeAssetIntoCard}from"./to-card.js";

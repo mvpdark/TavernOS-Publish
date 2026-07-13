@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@tavernos/core": "*",
+    "@tavernos/core": "workspace:*",
     "hono": "^4.6.0",
     "i18next": "^26.3.4",
     "i18next-browser-languagedetector": "^8.2.1",

@@ -23,8 +23,11 @@ export interface PreWriteParams {
     readonly chapterIndex: number;
     /** The chapter outline / brief, used as the retrieval query. */
     readonly chapterOutline: string;
-    /** Character IDs to generate inner voice and retrieve top motives for.
-     *  Optional — when omitted, inner voice and motive tracking are skipped. */
+    /** Character names (NOT IDs) to generate inner voice and retrieve top motives for.
+     *  The NarrativeEngine subsystems (SceneClassifier, BondTracker, etc.) extract
+     *  participant names from chapter text, so all subsystems share the same
+     *  NAME-based key space. Optional — when omitted, inner voice and motive
+     *  tracking are skipped. */
     readonly mainCharacters?: readonly string[];
 }
 /** The assembled context returned before writing a chapter. */
@@ -50,7 +53,8 @@ export interface PostWriteParams {
     readonly chapterIndex: number;
     /** The full written chapter text. */
     readonly narrative: string;
-    /** Character IDs to track moods, epiphanies, and bonds for.
+    /** Character names (NOT IDs) to track moods, epiphanies, and bonds for.
+     *  The NarrativeEngine subsystems use character NAME as the key space.
      *  Optional — when omitted, per-character tracking is skipped. */
     readonly mainCharacters?: readonly string[];
     /** Total word count of the chapter. */
@@ -140,6 +144,24 @@ export declare class NarrativeEngine {
      *  (zero-LLM) mode and story-facts.json stays empty.
      */
     constructor(projectRoot: string, agentContext?: AgentContext);
+    /**
+     * Verify that all 8 SQLite database files exist on disk.
+     *
+     * The constructor calls `mkdirSync` before creating the databases, so the
+     * `narrative/` directory always exists — but if any `new Database(dbPath)`
+     * call throws (e.g. stale dist, native-module load failure, permission
+     * error), the directory will be empty and the engine is in a broken state.
+     *
+     * Callers should invoke this immediately after `new NarrativeEngine(...)`
+     * and treat a non-empty `missing` array as a fatal construction failure.
+     *
+     * @returns `{ allExist, missing }` — `allExist` is true when every expected
+     *  `.db` file is present.
+     */
+    verifyDatabases(): {
+        allExist: boolean;
+        missing: string[];
+    };
     /**
      * Assemble the narrative context for a chapter about to be written.
      *

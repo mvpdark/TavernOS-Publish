@@ -1,4 +1,4 @@
-import type { BookConfig, Chapter, WriterInput } from "@tavernos/core";
+import type { BookConfig, Chapter, ScribeInput } from "@tavernos/core";
 export interface StoryContext {
     storyBible: string;
     currentState: string;
@@ -18,10 +18,10 @@ export interface StoryContext {
  */
 export declare function buildStoryContext(projectRoot: string, bookId: string, bookConfig: BookConfig): Promise<StoryContext>;
 /**
- * Build the WriterInput for the narrative writer agent.
+ * Build the ScribeInput for the narrative scribe agent.
  * Uses the story context and an optional outline/intent from the user.
  */
-export declare function buildWriterInput(chapterNumber: number, storyCtx: StoryContext, outline?: string): WriterInput;
+export declare function buildScribeInput(chapterNumber: number, storyCtx: StoryContext, outline?: string): ScribeInput;
 /** Count words: CJK characters counted individually, Latin words split by whitespace. */
 export declare function countWords(text: string): number;
 //# sourceMappingURL=pipeline-helpers.d.ts.map

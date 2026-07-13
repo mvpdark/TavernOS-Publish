@@ -32,8 +32,16 @@ export declare class GroupChatSessionManager {
     nextSpeakerId(): string;
     /**
      * Compute the next speaker index when the current speaker has exhausted
-     * their turn interval. For round-robin, the cycle start rotates forward
-     * after each full rotation so the "first" speaker changes each cycle.
+     * their turn interval.
+     *
+     * This uses plain sequential advancement (a, b, c, a, b, c, ...) which is
+     * correct for any `turnInterval`. The previous "rotate the first speaker
+     * each cycle" logic was removed because it produced wrong sequences when
+     * `turnInterval === 1`: rotating `currentTurnIndex` mid-stream desynced the
+     * `baseNext === 0` wrap detection and caused members to repeat (e.g.
+     * ...b, c, c...). Only a full-cycle boundary is a safe rotation point, and
+     * even then the subsequent wrap detection breaks, so plain round-robin is
+     * the correct, minimal behaviour.
      */
     private nextIndexAfterExhaustion;
     /**

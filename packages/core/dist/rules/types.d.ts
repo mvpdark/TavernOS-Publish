@@ -1,7 +1,7 @@
 import { z } from "zod";
 /** The three layers of the genre rules system. */
 export type GenreLayer = "universal" | "genre" | "book";
-/** Severity of a rule violation, matching the AuditIssue severity scale. */
+/** Severity of a rule violation, matching the SentinelIssue severity scale. */
 export type GenreSeverity = "error" | "warning" | "info";
 /**
  * Story context passed to rule check functions.

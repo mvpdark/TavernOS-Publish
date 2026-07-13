@@ -26,7 +26,7 @@ export const AssetSchema = z.object({
   /** Canonical name of the asset (e.g. character name, scene name). */
   name: z.string().min(1),
   /** Alternative names, nicknames, or aliases used in the text. */
-  aliases: z.array(z.string()).default([]),
+  aliases: z.array(z.string().min(1)).default([]),
   /** Free-text description (appearance, personality, visual features, etc.). */
   description: z.string().default(""),
   /** First chapter where this asset appeared. */
@@ -37,6 +37,9 @@ export const AssetSchema = z.object({
   attributes: z.record(z.string(), z.string()).default({}),
   /** Number of chapters in which this asset has appeared. */
   appearanceCount: z.number().int().min(1).default(1),
+}).refine((d) => d.lastChapter >= d.firstChapter, {
+  message: "lastChapter must be >= firstChapter",
+  path: ["lastChapter"],
 });
 export type Asset = z.infer<typeof AssetSchema>;
 
@@ -65,6 +68,8 @@ export interface AssetExtractionResult {
   readonly degraded: boolean;
   /** Error message when extraction degraded due to a thrown error (undefined on success). */
   readonly error?: string;
+  /** Token usage from the LLM call (undefined when the LLM call fails). */
+  readonly usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }
 
 // ---------------------------------------------------------------------------

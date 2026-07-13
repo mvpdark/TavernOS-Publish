@@ -20,12 +20,17 @@ export interface VideoReviewResult {
     rerollPrompt?: string;
     summary: string;
 }
+/** Options for LLM calls (abort/timeout passthrough). */
+export interface VideoReviewCallOptions {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+}
 export interface VideoReviewer {
     review(params: {
         videoClip: VideoClip;
         scriptContext?: string;
         referenceImages?: string[];
-    }): Promise<VideoReviewResult>;
+    }, options?: VideoReviewCallOptions): Promise<VideoReviewResult>;
 }
 export declare function createVideoReviewer(ctx: AgentContext): VideoReviewer;
 export declare const VIDEO_REVIEW_DIMENSIONS: readonly ["visual_quality", "character_consistency", "motion_naturalness", "scene_compliance", "face_expr", "body_lang", "voice_visual_sync", "technical", "compliance"];

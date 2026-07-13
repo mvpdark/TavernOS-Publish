@@ -165,6 +165,41 @@ export default function Library(): JSX.Element {
   const [statsMap, setStatsMap] = useState<Record<string, ProjectStats>>({});
   const [generatingCover, setGeneratingCover] = useState<string | null>(null);
 
+  // Pagination: show 2 rows per page
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [columns, setColumns] = useState(6);
+
+  // Detect grid columns via ResizeObserver for responsive pagination.
+  // Re-run when projects.length changes: the grid div is conditionally
+  // rendered (only when projects.length > 0), so the ref is null on first
+  // mount when the list is empty. We need to re-attach when it appears.
+  useEffect(() => {
+    if (!gridRef.current) return;
+    const el = gridRef.current;
+    const updateColumns = (): void => {
+      const width = el.clientWidth;
+      const gap = 16; // gap-4
+      const cardWidth = 120;
+      const cols = Math.max(1, Math.floor((width + gap) / (cardWidth + gap)));
+      setColumns(cols);
+    };
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [projects.length]);
+
+  const itemsPerPage = columns * 2; // 2 rows
+  const totalPages = Math.max(1, Math.ceil(projects.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const pageProjects = projects.slice(safePage * itemsPerPage, safePage * itemsPerPage + itemsPerPage);
+
+  // Reset to page 0 when project list changes significantly
+  useEffect(() => {
+    if (currentPage > totalPages - 1) setCurrentPage(0);
+  }, [totalPages, currentPage]);
+
   // Upload novel state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadFileName, setUploadFileName] = useState("");
@@ -200,8 +235,13 @@ export default function Library(): JSX.Element {
     if (completed.length === 0) return;
     lastCoverRefreshRef.current = now;
     void fetchProjects();
-    setGeneratingCover(null);
-  }, [taskTasks, fetchProjects]);
+    // Only clear generatingCover if the completed task matches the
+    // currently-generating project — otherwise we'd clear a different
+    // project's loading state.
+    if (generatingCover && completed.some((t) => t.projectId === generatingCover)) {
+      setGeneratingCover(null);
+    }
+  }, [taskTasks, fetchProjects, generatingCover]);
 
   // 生成小说封面
   const handleGenerateCover = async (projectId: string): Promise<void> => {
@@ -354,12 +394,16 @@ export default function Library(): JSX.Element {
 
   const openProject = (p: Project): void => {
     setCurrentProject(p);
-    // Has chapters → go to interactive writing; new project → go to blueprint
+    // Has chapters → go to interactive writing; new project → go to blueprint.
+    // When stats haven't loaded yet, default to blueprint (safe fallback).
     const stats = statsMap[p.id];
     if (stats && stats.chapters > 0) {
       navigate("/write/create");
-    } else {
+    } else if (stats && stats.chapters === 0) {
       navigate("/write/blueprint");
+    } else {
+      // Stats not loaded — check if project has a version (indicates prior work)
+      navigate(p.version ? "/write/create" : "/write/blueprint");
     }
   };
 
@@ -446,20 +490,47 @@ export default function Library(): JSX.Element {
           className="mt-8"
         />
       ) : (
-        <div className="mt-6 flex flex-wrap gap-4">
-          {projects.map((p) => (
-            <NovelCard
-              key={p.id}
-              project={p}
-              stats={statsMap[p.id] ?? null}
-              onOpen={() => openProject(p)}
-              onDelete={() => setConfirmDelete(p)}
-              onGenerateCover={() => void handleGenerateCover(p.id)}
-              generatingCover={generatingCover === p.id}
-              onContextMenu={(e) => handleContextMenu(e, p)}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            ref={gridRef}
+            className="mt-6 flex flex-wrap gap-4"
+          >
+            {pageProjects.map((p) => (
+              <NovelCard
+                key={p.id}
+                project={p}
+                stats={statsMap[p.id] ?? null}
+                onOpen={() => openProject(p)}
+                onDelete={() => setConfirmDelete(p)}
+                onGenerateCover={() => void handleGenerateCover(p.id)}
+                generatingCover={generatingCover === p.id}
+                onContextMenu={(e) => handleContextMenu(e, p)}
+              />
+            ))}
+          </div>
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="btn-press rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#C9A86C] transition-colors hover:border-[#C9A86C]/30 disabled:opacity-30 disabled:hover:border-[#2A2A2A]"
+              >
+                上一页
+              </button>
+              <span className="text-sm text-gray-500">
+                {safePage + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage === totalPages - 1}
+                className="btn-press rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#C9A86C] transition-colors hover:border-[#C9A86C]/30 disabled:opacity-30 disabled:hover:border-[#2A2A2A]"
+              >
+                下一页
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create modal */}

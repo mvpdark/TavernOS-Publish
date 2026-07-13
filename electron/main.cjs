@@ -12,11 +12,12 @@
 // launch Windows SmartScreen may show a warning. For production distribution,
 // sign the installer and executable with a code-signing certificate.
 
-const { app, BrowserWindow, ipcMain, dialog, session, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, session, Menu, shell } = require("electron");
 const { spawn, execSync, exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
+const https = require("https");
 const net = require("net");
 
 let BACKEND_PORT = 17777; // findAvailablePort() starts scanning from 17777
@@ -40,14 +41,6 @@ function logToFile(msg) {
   } catch (e) {
     // ignore
   }
-}
-
-// Resolve icon path based on platform
-function getIconPath() {
-  if (process.platform === "darwin") {
-    return path.join(__dirname, "build", "icon.icns");
-  }
-  return path.join(__dirname, "build", "icon.ico");
 }
 
 // Find an available port starting from BACKEND_PORT
@@ -164,15 +157,11 @@ async function startBackend() {
       }
     );
   } else {
-    // Production: use the bundled standalone Node.js binary to run the server
-    // via the CommonJS wrapper. The wrapper sets up require() resolution paths
-    // for native modules (better-sqlite3, sharp) before dynamically importing
-    // the ESM server bundle.
-    // On Windows: resources/node/node.exe
-    // On macOS:   resources/node/node
-    const nodeExe = process.platform === "win32"
-      ? path.join(process.resourcesPath, "node", "node.exe")
-      : path.join(process.resourcesPath, "node", "bin", "node");
+    // Production: use the bundled standalone Node.js v22 binary (ABI 127)
+    // to run the server via the CommonJS wrapper. The wrapper sets up
+    // require() resolution paths for native modules (better-sqlite3, sharp)
+    // before dynamically importing the ESM server bundle.
+    const nodeExe = path.join(process.resourcesPath, "node", "node.exe");
     logToFile(`Node exe: ${nodeExe}`);
     logToFile(`Node exe exists: ${fs.existsSync(nodeExe)}`);
     backendProcess = spawn(nodeExe, [startupWrapper], {
@@ -220,7 +209,7 @@ function createSplashWindow() {
     resizable: false,
     transparent: false,
     show: true,
-    icon: getIconPath(),
+    icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -254,7 +243,7 @@ function createMainWindow() {
     minHeight: 700,
     show: false,
     backgroundColor: "#0A0A0A",
-    icon: getIconPath(),
+    icon: path.join(__dirname, "build", "icon.ico"),
     title: "TavernOS",
     autoHideMenuBar: true,
     webPreferences: {
@@ -270,17 +259,38 @@ function createMainWindow() {
   logToFile(`Loading main window: ${appURL}`);
   mainWindow.loadURL(appURL);
 
+  // Retry counter for did-fail-load — prevent an infinite retry loop with
+  // exponential backoff and a hard cap on the number of attempts.
+  let loadRetryCount = 0;
+  const MAX_LOAD_RETRIES = 5;
+
+  // HTML-escape dynamic values before injecting into the error page to
+  // prevent DOM-based injection via crafted error strings.
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+
   // Debug: log load events
   mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
-    logToFile(`Main window load failed: ${errorCode} ${errorDescription} URL: ${validatedURL}`);
-    console.error(`[electron] Main window load failed: ${errorCode} ${errorDescription}`);
-    // HTML-escape dynamic values before injecting into the error page to
-    // prevent DOM-based injection via crafted error strings.
-    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
+    loadRetryCount++;
+    logToFile(`Main window load failed (attempt ${loadRetryCount}/${MAX_LOAD_RETRIES}): ${errorCode} ${errorDescription} URL: ${validatedURL}`);
+    console.error(`[electron] Main window load failed (attempt ${loadRetryCount}/${MAX_LOAD_RETRIES}): ${errorCode} ${errorDescription}`);
+
     const safeCode = escapeHtml(errorCode);
     const safeDesc = escapeHtml(errorDescription);
+
+    // Stop retrying after MAX_LOAD_RETRIES — show a permanent error page.
+    if (loadRetryCount > MAX_LOAD_RETRIES) {
+      logToFile(`Main window load retry limit (${MAX_LOAD_RETRIES}) reached, showing permanent error page`);
+      const fatalHTML = `<html><body style="background:#0a0a0a;color:#C9A86C;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;margin:0;padding:20px;box-sizing:border-box;">
+        <h2 style="margin:0;">无法连接后端服务</h2>
+        <p style="color:#888;text-align:center;">已重试 ${MAX_LOAD_RETRIES} 次仍失败 (端口 ${BACKEND_PORT})</p>
+        <p style="color:#555;font-size:12px;text-align:center;">错误代码: ${safeCode} - ${safeDesc}<br>请查看日志: ~/.tavernos/electron.log<br>请手动重启应用。</p>
+      </body></html>`;
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fatalHTML)}`);
+      return;
+    }
+
     // Show error page instead of white screen
     const errorHTML = `<html><body style="background:#0a0a0a;color:#C9A86C;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;margin:0;padding:20px;box-sizing:border-box;">
       <h2 style="margin:0;">加载失败</h2>
@@ -289,9 +299,12 @@ function createMainWindow() {
       <button onclick="location.reload()" style="background:#C9A86C;color:#0a0a0a;border:none;padding:10px 24px;border-radius:4px;cursor:pointer;font-size:14px;">重试</button>
     </body></html>`;
     mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHTML)}`);
+    // Exponential backoff: 3s, 6s, 12s, 24s, 30s (capped at 30s).
+    const backoff = Math.min(3000 * Math.pow(2, loadRetryCount - 1), 30000);
+    logToFile(`Retrying main window load in ${backoff}ms (attempt ${loadRetryCount})`);
     setTimeout(() => {
       if (mainWindow) mainWindow.loadURL(appURL);
-    }, 3000);
+    }, backoff);
   });
 
   mainWindow.webContents.on("did-start-loading", () => {
@@ -334,8 +347,19 @@ function createMainWindow() {
   });
 
   mainWindow.on("closed", () => {
+    // Clear the force-show timer so it doesn't fire on a destroyed window.
+    clearTimeout(forceShowTimer);
     mainWindow = null;
   });
+
+  // Check for updates 3s after the window is created (non-blocking, async).
+  // This runs after the main window exists so the update dialog has a parent
+  // and the taskbar progress bar can reflect the download progress.
+  setTimeout(() => {
+    checkForUpdates().catch((err) =>
+      logToFile(`checkForUpdates unexpected error: ${err.message}`)
+    );
+  }, 3000);
 }
 
 // ---------------------------------------------------------------------------
@@ -348,7 +372,7 @@ function createOnboardingWindow() {
     frame: false,
     resizable: false,
     show: true,
-    icon: getIconPath(),
+    icon: path.join(__dirname, "build", "icon.ico"),
     title: "TavernOS - 初始设置",
     webPreferences: {
       contextIsolation: true,
@@ -370,6 +394,237 @@ function createOnboardingWindow() {
     console.error("[electron] Failed to load onboarding:", err);
   });
   return onboardingWin;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-update — check GitHub Releases for a newer version on startup
+// ---------------------------------------------------------------------------
+const GITHUB_REPO = "mvpdark/TavernOS-Publish";
+const UPDATE_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const INSTALLER_PATTERN = /^TavernOS-Setup-.*-x64\.exe$/;
+
+// Compare two version strings (e.g. "v0.3.1" vs "0.3.0").
+// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
+function compareVersions(v1, v2) {
+  const normalize = (v) =>
+    String(v).replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const a = normalize(v1);
+  const b = normalize(v2);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] || 0;
+    const y = b[i] || 0;
+    if (x > y) return 1;
+    if (x < y) return -1;
+  }
+  return 0;
+}
+
+// Fetch the latest release info from the GitHub Releases API.
+function fetchLatestRelease() {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      UPDATE_API_URL,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent": "TavernOS-Updater",
+          Accept: "application/vnd.github+json",
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          if (res.statusCode === 200) {
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(e);
+            }
+          } else {
+            reject(new Error(`GitHub API returned status ${res.statusCode}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error("GitHub API request timeout"));
+    });
+    req.end();
+  });
+}
+
+// Download a file with redirect support and an optional progress callback.
+// GitHub release asset URLs redirect (302) to a signed objects URL, so
+// redirects must be followed manually when using Node's https module.
+function downloadFile(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+    let redirects = 0;
+
+    const doGet = (targetUrl) => {
+      const req = https.get(targetUrl, (res) => {
+        if (
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location &&
+          redirects < 5
+        ) {
+          redirects++;
+          res.resume();
+          const next = res.headers.location.startsWith("http")
+            ? res.headers.location
+            : new URL(res.headers.location, targetUrl).href;
+          doGet(next);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          fs.unlink(destPath, () => {});
+          reject(new Error(`Download failed with status ${res.statusCode}`));
+          return;
+        }
+        const total = parseInt(res.headers["content-length"] || "0", 10);
+        let received = 0;
+        res.on("data", (chunk) => {
+          received += chunk.length;
+          if (total > 0 && onProgress) onProgress(received, total);
+        });
+        res.pipe(file);
+        file.on("finish", () => {
+          file.close((err) => {
+            if (err) {
+              fs.unlink(destPath, () => {});
+              reject(err);
+            } else {
+              resolve(destPath);
+            }
+          });
+        });
+      });
+      req.on("error", (err) => {
+        fs.unlink(destPath, () => {});
+        reject(err);
+      });
+      req.setTimeout(300000, () => {
+        req.destroy();
+        fs.unlink(destPath, () => {});
+        reject(new Error("Download timeout (5 min)"));
+      });
+    };
+
+    doGet(url);
+  });
+}
+
+// Find the NSIS installer asset in a release's assets array.
+function findInstallerAsset(assets) {
+  if (!Array.isArray(assets)) return null;
+  return assets.find((a) => a && INSTALLER_PATTERN.test(a.name)) || null;
+}
+
+// Check GitHub Releases for a newer version and prompt the user to update.
+// Silently ignores all network/parse errors so it never blocks startup.
+async function checkForUpdates() {
+  // Only check in packaged builds — dev runs have no installer to apply and
+  // would otherwise nag the developer on every launch. Remove this guard to
+  // also check in development.
+  if (!app.isPackaged) {
+    logToFile("Skipping update check in dev mode");
+    return;
+  }
+
+  logToFile("Checking for updates...");
+  try {
+    const release = await fetchLatestRelease();
+    const latestTag = release.tag_name;
+    const currentVersion = app.getVersion();
+    logToFile(
+      `Current version: v${currentVersion}, Latest release: ${latestTag}`
+    );
+
+    if (!latestTag || compareVersions(latestTag, currentVersion) <= 0) {
+      logToFile("App is up to date");
+      return;
+    }
+
+    logToFile(`New version available: ${latestTag}`);
+
+    const asset = findInstallerAsset(release.assets);
+    if (!asset) {
+      logToFile("No matching installer asset found in release");
+      return;
+    }
+    logToFile(`Found installer: ${asset.name} (${asset.size} bytes)`);
+
+    // Ask the user whether to update now.
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "发现新版本",
+      message: `TavernOS ${latestTag} 已发布`,
+      detail:
+        `当前版本: v${currentVersion}\n` +
+        `最新版本: ${latestTag}\n\n` +
+        `是否立即下载并安装更新？\n` +
+        `更新过程中应用将自动关闭，安装完成后会自动重启。`,
+      buttons: ["立即更新", "稍后"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (choice.response !== 0) {
+      logToFile("User postponed the update");
+      return;
+    }
+
+    logToFile("User accepted update, starting download");
+    if (mainWindow) mainWindow.setProgressBar(0);
+
+    const fileName = asset.name || "TavernOS-Setup.exe";
+    const destPath = path.join(app.getPath("temp"), fileName);
+
+    const downloadedPath = await downloadFile(
+      asset.browser_download_url,
+      (received, total) => {
+        if (mainWindow) mainWindow.setProgressBar(received / total);
+      }
+    );
+    logToFile(`Download complete: ${downloadedPath}`);
+
+    if (mainWindow) mainWindow.setProgressBar(-1);
+
+    // Confirm before launching the installer (it will kill this process).
+    const installChoice = await dialog.showMessageBox(mainWindow, {
+      type: "question",
+      title: "安装更新",
+      message: "下载完成",
+      detail:
+        `安装包已下载到:\n${downloadedPath}\n\n` +
+        `点击"安装"将关闭应用并运行安装程序。\n` +
+        `安装完成后应用会自动重启。`,
+      buttons: ["安装", "取消"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (installChoice.response !== 0) {
+      logToFile("User cancelled installation");
+      return;
+    }
+
+    logToFile("Launching installer and quitting app");
+    // NSIS installer kills the running app and restarts it after install
+    // (runAfterFinish), so we just open the installer and quit immediately.
+    await shell.openPath(downloadedPath);
+    isQuitting = true;
+    app.quit();
+  } catch (err) {
+    logToFile(`Update check failed: ${err.message}`);
+    if (mainWindow) mainWindow.setProgressBar(-1);
+    // Silently ignore — never block startup with update errors.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -485,20 +740,15 @@ app.on("before-quit", () => {
   isQuitting = true;
   if (backendProcess) {
     try {
-      // Kill the backend process tree.
-      // On Windows, use taskkill for tree-kill. On macOS/Linux, use SIGTERM.
+      // Kill the entire process tree on Windows.
+      // Guard against `pid` being undefined (process may not have spawned).
       if (process.platform === "win32") {
         if (backendProcess.pid) {
-          spawn("taskkill", ["/PID", String(backendProcess.pid), "/T", "/F"], {
-            shell: true,
-          });
+          // taskkill is a real executable on Windows; no shell is needed.
+          spawn("taskkill", ["/PID", String(backendProcess.pid), "/T", "/F"]);
         }
       } else {
-        // On macOS/Linux, kill the process group (negative PID)
-        if (backendProcess.pid) {
-          try { process.kill(-backendProcess.pid, "SIGTERM"); } catch {}
-          backendProcess.kill("SIGTERM");
-        }
+        backendProcess.kill("SIGTERM");
       }
     } catch (e) {
       console.error("[electron] Failed to kill backend:", e);
@@ -510,9 +760,12 @@ app.on("before-quit", () => {
 // IPC handlers for onboarding
 // ---------------------------------------------------------------------------
 ipcMain.handle("get-available-disks", async () => {
+  // On Windows, check which drive letters are available
   const disks = [];
   if (process.platform === "win32") {
     try {
+      // Use PowerShell via async `exec` (non-blocking) instead of execSync so
+      // the main process event loop isn't stalled while PowerShell loads.
       const output = await new Promise((resolve, reject) => {
         exec(
           'powershell -Command "Get-CimInstance Win32_LogicalDisk | Select-Object -ExpandProperty Name"',
@@ -528,6 +781,7 @@ ipcMain.handle("get-available-disks", async () => {
         disks.push({ drive: letter, label: `${letter}\\` });
       }
     } catch {
+      // Fallback: just list common drives
       for (let i = 67; i <= 90; i++) {
         const letter = String.fromCharCode(i) + ":";
         if (fs.existsSync(letter + "\\")) {
@@ -535,44 +789,14 @@ ipcMain.handle("get-available-disks", async () => {
         }
       }
     }
-  } else if (process.platform === "darwin") {
-    // macOS: list mounted volumes under /Volumes and home directory
-    disks.push({ drive: app.getPath("home"), label: "Home" });
-    try {
-      const volumes = fs.readdirSync("/Volumes", { withFileTypes: true });
-      for (const v of volumes) {
-        if (v.isDirectory() || v.isBlockDevice()) {
-          const volPath = path.join("/Volumes", v.name);
-          disks.push({ drive: volPath, label: v.name });
-        }
-      }
-    } catch {}
-  } else {
-    // Linux: list /home and /mnt, /media
-    disks.push({ drive: app.getPath("home"), label: "Home" });
-    for (const mnt of ["/mnt", "/media"]) {
-      try {
-        const entries = fs.readdirSync(mnt, { withFileTypes: true });
-        for (const e of entries) {
-          if (e.isDirectory()) {
-            disks.push({ drive: path.join(mnt, e.name), label: e.name });
-          }
-        }
-      } catch {}
-    }
   }
   return disks;
 });
 
 ipcMain.handle("select-disk", async (event, disk) => {
-  // Validate the disk argument to prevent path traversal.
-  // On Windows: only allow a bare drive letter (e.g. "D:" or "D:\").
-  // On macOS/Linux: allow absolute paths under /Volumes, /home, /mnt, /media.
-  const isWin = process.platform === "win32";
-  const validPath = isWin
-    ? /^[A-Za-z]:\\?$/.test(disk)
-    : /^(\/(Volumes|home|mnt|media|Users|tmp))([\/][\w\- .]+)*$/.test(disk);
-  if (!validPath) {
+  // Validate the disk argument to prevent path traversal. Only allow a bare
+  // Windows drive letter (optionally with a trailing backslash), e.g. "D:".
+  if (!/^[A-Za-z]:\\?$/.test(disk)) {
     event.reply("disk-selected", { error: "Invalid disk" });
     return { success: false, error: "Invalid disk" };
   }

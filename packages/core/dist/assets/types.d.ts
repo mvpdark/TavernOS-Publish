@@ -1,7 +1,7 @@
 import { z } from "zod";
 export declare const AssetKindSchema: z.ZodEnum<["character", "scene", "prop"]>;
 export type AssetKind = z.infer<typeof AssetKindSchema>;
-export declare const AssetSchema: z.ZodObject<{
+export declare const AssetSchema: z.ZodEffects<z.ZodObject<{
     /** Stable identifier (auto-generated or LLM-provided). */
     id: z.ZodString;
     /** Which category the asset belongs to. */
@@ -40,10 +40,30 @@ export declare const AssetSchema: z.ZodObject<{
     lastChapter?: number | undefined;
     attributes?: Record<string, string> | undefined;
     appearanceCount?: number | undefined;
+}>, {
+    id: string;
+    name: string;
+    description: string;
+    aliases: string[];
+    kind: "character" | "scene" | "prop";
+    firstChapter: number;
+    lastChapter: number;
+    attributes: Record<string, string>;
+    appearanceCount: number;
+}, {
+    id: string;
+    name: string;
+    kind: "character" | "scene" | "prop";
+    description?: string | undefined;
+    aliases?: string[] | undefined;
+    firstChapter?: number | undefined;
+    lastChapter?: number | undefined;
+    attributes?: Record<string, string> | undefined;
+    appearanceCount?: number | undefined;
 }>;
 export type Asset = z.infer<typeof AssetSchema>;
 export declare const AssetCatalogSchema: z.ZodObject<{
-    characters: z.ZodDefault<z.ZodArray<z.ZodObject<{
+    characters: z.ZodDefault<z.ZodArray<z.ZodEffects<z.ZodObject<{
         /** Stable identifier (auto-generated or LLM-provided). */
         id: z.ZodString;
         /** Which category the asset belongs to. */
@@ -82,8 +102,28 @@ export declare const AssetCatalogSchema: z.ZodObject<{
         lastChapter?: number | undefined;
         attributes?: Record<string, string> | undefined;
         appearanceCount?: number | undefined;
+    }>, {
+        id: string;
+        name: string;
+        description: string;
+        aliases: string[];
+        kind: "character" | "scene" | "prop";
+        firstChapter: number;
+        lastChapter: number;
+        attributes: Record<string, string>;
+        appearanceCount: number;
+    }, {
+        id: string;
+        name: string;
+        kind: "character" | "scene" | "prop";
+        description?: string | undefined;
+        aliases?: string[] | undefined;
+        firstChapter?: number | undefined;
+        lastChapter?: number | undefined;
+        attributes?: Record<string, string> | undefined;
+        appearanceCount?: number | undefined;
     }>, "many">>;
-    scenes: z.ZodDefault<z.ZodArray<z.ZodObject<{
+    scenes: z.ZodDefault<z.ZodArray<z.ZodEffects<z.ZodObject<{
         /** Stable identifier (auto-generated or LLM-provided). */
         id: z.ZodString;
         /** Which category the asset belongs to. */
@@ -122,8 +162,28 @@ export declare const AssetCatalogSchema: z.ZodObject<{
         lastChapter?: number | undefined;
         attributes?: Record<string, string> | undefined;
         appearanceCount?: number | undefined;
+    }>, {
+        id: string;
+        name: string;
+        description: string;
+        aliases: string[];
+        kind: "character" | "scene" | "prop";
+        firstChapter: number;
+        lastChapter: number;
+        attributes: Record<string, string>;
+        appearanceCount: number;
+    }, {
+        id: string;
+        name: string;
+        kind: "character" | "scene" | "prop";
+        description?: string | undefined;
+        aliases?: string[] | undefined;
+        firstChapter?: number | undefined;
+        lastChapter?: number | undefined;
+        attributes?: Record<string, string> | undefined;
+        appearanceCount?: number | undefined;
     }>, "many">>;
-    props: z.ZodDefault<z.ZodArray<z.ZodObject<{
+    props: z.ZodDefault<z.ZodArray<z.ZodEffects<z.ZodObject<{
         /** Stable identifier (auto-generated or LLM-provided). */
         id: z.ZodString;
         /** Which category the asset belongs to. */
@@ -143,6 +203,26 @@ export declare const AssetCatalogSchema: z.ZodObject<{
         /** Number of chapters in which this asset has appeared. */
         appearanceCount: z.ZodDefault<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
+        id: string;
+        name: string;
+        description: string;
+        aliases: string[];
+        kind: "character" | "scene" | "prop";
+        firstChapter: number;
+        lastChapter: number;
+        attributes: Record<string, string>;
+        appearanceCount: number;
+    }, {
+        id: string;
+        name: string;
+        kind: "character" | "scene" | "prop";
+        description?: string | undefined;
+        aliases?: string[] | undefined;
+        firstChapter?: number | undefined;
+        lastChapter?: number | undefined;
+        attributes?: Record<string, string> | undefined;
+        appearanceCount?: number | undefined;
+    }>, {
         id: string;
         name: string;
         description: string;
@@ -243,6 +323,12 @@ export interface AssetExtractionResult {
     readonly degraded: boolean;
     /** Error message when extraction degraded due to a thrown error (undefined on success). */
     readonly error?: string;
+    /** Token usage from the LLM call (undefined when the LLM call fails). */
+    readonly usage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
 }
 /** Returns a fresh empty catalog (used as a fallback when extraction fails). */
 export declare function emptyCatalog(): AssetCatalog;

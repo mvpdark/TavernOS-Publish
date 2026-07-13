@@ -1,6 +1,15 @@
 node_modules
-dist
+release
 *.log
 .git
 *.md
 .tavernos
+.env
+.env.local
+android
+mobile-deps
+packages/*/src
+packages/*/node_modules
+electron
+scripts
+.github

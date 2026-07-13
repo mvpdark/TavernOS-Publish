@@ -92,6 +92,10 @@ export default function Editor(): JSX.Element {
   const [showHistory, setShowHistory] = useState(false);
   const historyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUndoRedo = useRef(false);
+  // Mirror historyIndex in a ref so setTimeout closures always read the
+  // latest value instead of a stale capture from the render scope.
+  const historyIndexRef = useRef(-1);
+  useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,7 +196,9 @@ export default function Editor(): JSX.Element {
     if (!isUndoRedo.current) {
       historyTimer.current = setTimeout(() => {
         setHistory((prev) => {
-          const truncated = prev.slice(0, historyIndex + 1);
+          // Use functional update to read the latest historyIndex,
+          // avoiding stale closure capture from the render scope.
+          const truncated = prev.slice(0, historyIndexRef.current + 1);
           const next = [...truncated, { content: v, timestamp: Date.now(), label: `v${truncated.length + 1}` }];
           return next.slice(-30);
         });

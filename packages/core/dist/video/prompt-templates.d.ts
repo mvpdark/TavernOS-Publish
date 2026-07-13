@@ -74,6 +74,10 @@ export declare function recommendTemplates(context: {
     emotion?: string;
     sceneType?: string;
     characterCount?: number;
+    /** Desired shot type (e.g. "close-up", "medium shot") for cinematography-aware matching. */
+    shotType?: string;
+    /** Desired camera movement (e.g. "slow push-in", "static") for cinematography-aware matching. */
+    cameraMovement?: string;
 }): PromptTemplate[];
 /**
  * Get random templates, optionally filtered by category.

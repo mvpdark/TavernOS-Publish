@@ -91,7 +91,16 @@ export async function resolveBookId(
   ctx: CliContext,
   explicit?: string,
 ): Promise<string> {
-  if (explicit) return explicit;
+  if (explicit) {
+    // Reject path traversal attempts — a book id must be a plain identifier,
+    // not a path with separators or parent-directory sequences.
+    if (/[/\\]|\.\./.test(explicit)) {
+      throw new Error(
+        `Invalid book ID: ${explicit} (must not contain path separators or ..)`,
+      );
+    }
+    return explicit;
+  }
   const ids = await listBookIds(ctx.projectRoot);
   if (ids.length === 0) {
     throw new Error("No books found. Run `tavernos book create <title>` first.");

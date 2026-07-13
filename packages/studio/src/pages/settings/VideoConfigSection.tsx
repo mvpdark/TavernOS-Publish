@@ -70,6 +70,7 @@ export default function VideoConfigSection(): JSX.Element | null {
   if (!config) return null;
 
   const isJimengDirect = config.provider === "jimeng-direct";
+  const isJimengProvider = isJimengDirect;
 
   return (
     <div>
@@ -92,6 +93,7 @@ export default function VideoConfigSection(): JSX.Element | null {
             setJimengTestResult(null);
           }}
           options={providers.map((p) => p.id)}
+          optionLabels={providers.map((p) => p.name)}
         />
 
         {(() => {
@@ -102,6 +104,7 @@ export default function VideoConfigSection(): JSX.Element | null {
               value={config.model}
               onChange={(v) => setConfig({ ...config, model: v })}
               options={vp.models.map((m) => m.id)}
+              optionLabels={vp.models.map((m) => m.name)}
             />
           ) : (
             <TextInput
@@ -113,10 +116,10 @@ export default function VideoConfigSection(): JSX.Element | null {
         })()}
 
         {/* --- 即梦直连专属配置 --- */}
-        {isJimengDirect && (
+        {isJimengProvider && (
           <>
             <div className="rounded-[7px] bg-[rgba(180,160,120,0.06)] p-3 text-xs leading-relaxed text-[#8B7E6A]">
-              <p className="mb-1 font-semibold text-[#7A6E5A]">即梦直连使用说明</p>
+              <p className="mb-1 font-semibold text-[#7A6E5A]">即梦 Session ID 获取说明</p>
               <p>1. 打开 <a href="https://jimeng.jianying.com" target="_blank" rel="noopener noreferrer" className="underline">jimeng.jianying.com</a> 并登录</p>
               <p>2. 按 F12 打开开发者工具 → Application → Cookies → https://jimeng.jianying.com</p>
               <p>3. 找到 <code className="rounded bg-[rgba(122,110,90,0.1)] px-1">sessionid</code> 这一行，复制 Value 值</p>
@@ -146,8 +149,8 @@ export default function VideoConfigSection(): JSX.Element | null {
           </>
         )}
 
-        {/* --- 非 jimeng-direct 显示常规 API Key / Base URL --- */}
-        {!isJimengDirect && (
+        {/* --- 非即梦服务商显示常规 API Key / Base URL --- */}
+        {!isJimengProvider && (
           <>
             <TextInput
               label="API Key"

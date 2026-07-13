@@ -32,6 +32,16 @@ const AGENTS = [
   { id: "consultant", name: "蓝图顾问", desc: "创作顾问对话（建议强对话模型）", priority: ["anthropic", "yunwu", "openai", "grok", "agnes", "deepseek"] },
 ] as const;
 
+/** Visual divider with a label, used to group related configuration sections. */
+function SectionLabel({ label }: { label: string }): JSX.Element {
+  return (
+    <div className="mb-5 mt-12 flex items-center gap-3 first:mt-6">
+      <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#C9A86C]/50">{label}</span>
+      <div className="h-px flex-1 bg-gradient-to-r from-[#1A1A1A] to-transparent" />
+    </div>
+  );
+}
+
 export default function Settings(): JSX.Element {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -376,7 +386,9 @@ export default function Settings(): JSX.Element {
 
       {error && <p className="mt-4 rounded-[7px] bg-[rgba(201,104,90,0.08)] p-3 text-sm text-[#C9685A]">{error}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 [&>div]:mt-0">
+      {/* ── 语言模型 ── */}
+      <SectionLabel label="语言模型" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [&>div]:mt-0">
 
       <Stratum title="LLM 配置" subtitle="核心语言模型服务商与参数">
         <SelectField
@@ -398,6 +410,7 @@ export default function Settings(): JSX.Element {
             });
           }}
           options={providers.map((p) => p.id)}
+          optionLabels={providers.map((p) => p.name)}
         />
 
         {currentProvider && (
@@ -427,6 +440,7 @@ export default function Settings(): JSX.Element {
             value={settings.model}
             onChange={(v) => setSettings({ ...settings, model: v })}
             options={currentProvider.models.map((m) => m.id)}
+            optionLabels={currentProvider.models.map((m) => m.name)}
           />
         ) : (
           <TextInput
@@ -652,8 +666,9 @@ export default function Settings(): JSX.Element {
           提示：粘贴密钥后自动保存并验证，无需手动点击保存。密钥保存在本地 <code className="rounded bg-[#1A1A1A] px-1">settings.json</code>，界面仅显示掩码。
         </div>
       </Stratum>
+      </div>
 
-      {/* Agent model overrides for the writing pipeline */}
+      {/* Agent model overrides for the writing pipeline — full width */}
       <Stratum>
         <div className="flex items-center justify-between">
           <div>
@@ -795,21 +810,28 @@ export default function Settings(): JSX.Element {
         </div>
       </Stratum>
 
+      {/* ── 媒体生成 ── */}
+      <SectionLabel label="媒体生成" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 [&>div]:mt-0">
+
       {/* Image generation configuration */}
       <ImageConfigSection />
-
-      {/* TTS configuration */}
-      <TTSConfigSection />
 
       {/* Video generation configuration */}
       <VideoConfigSection />
 
       {/* Music generation configuration */}
       <MusicConfigSection />
+      </div>
+
+      {/* TTS configuration — full width (contains voice design/clone sub-sections) */}
+      <TTSConfigSection />
+
+      {/* ── 高级功能 ── */}
+      <SectionLabel label="高级功能" />
 
       {/* Plus module (daily silent character generation via LLM + Midjourney + WebDAV) */}
       <PlusConfigSection />
-      </div>
     </div>
   );
 }

@@ -20,7 +20,7 @@
 
 import { createCipheriv, createDecipheriv, scryptSync, randomBytes } from "node:crypto";
 import { hostname, userInfo } from "node:os";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, openSync, closeSync, writeSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
@@ -32,14 +32,20 @@ const SCRYPT_N = 16384; // cost factor
 let _cachedKey: Buffer | null = null;
 
 function getSalt(): Buffer {
-  if (existsSync(SALT_FILE)) {
-    return Buffer.from(readFileSync(SALT_FILE, "utf8").trim(), "hex");
-  }
-  // Generate a new random salt on first run
-  const salt = randomBytes(16);
   mkdirSync(dirname(SALT_FILE), { recursive: true });
-  writeFileSync(SALT_FILE, salt.toString("hex"), { mode: 0o600 });
-  return salt;
+  try {
+    const fd = openSync(SALT_FILE, "wx");
+    // we created it, write the salt
+    const salt = randomBytes(16);
+    writeSync(fd, salt.toString("hex"));
+    closeSync(fd);
+    return salt;
+  } catch (e: any) {
+    if (e.code === "EEXIST") {
+      return Buffer.from(readFileSync(SALT_FILE, "utf8").trim(), "hex"); // another process created it
+    }
+    throw e;
+  }
 }
 
 function deriveKey(): Buffer {

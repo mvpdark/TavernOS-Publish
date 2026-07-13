@@ -1,12 +1,12 @@
 import { z } from "zod";
 import type { AssetCatalog } from "../assets/types.js";
 /**
- * Shape of an audit issue, compatible with AuditIssue from agents/auditor.ts.
+ * Shape of an audit issue, compatible with SentinelIssue from agents/sentinel.ts.
  *
  * The `label` field is optional and used to distinguish rule-based issues
  * (label: "rule") from LLM-generated issues (no label).
  */
-export interface RuleAuditIssue {
+export interface RuleSentinelIssue {
     severity: "error" | "warning" | "info";
     scope: "global" | "chapter" | "paragraph";
     dimension: string;
@@ -18,7 +18,7 @@ export interface RuleAuditIssue {
     /** Optional suggestion for fixing the issue. */
     suggestion?: string;
 }
-export declare const RuleAuditIssueSchema: z.ZodObject<{
+export declare const RuleSentinelIssueSchema: z.ZodObject<{
     severity: z.ZodEnum<["error", "warning", "info"]>;
     scope: z.ZodEnum<["global", "chapter", "paragraph"]>;
     dimension: z.ZodString;
@@ -49,11 +49,11 @@ export declare const RuleAuditIssueSchema: z.ZodObject<{
 /**
  * Input for the rule-based audit engine.
  *
- * All fields except `chapterContent` are optional — the auditor runs
+ * All fields except `chapterContent` are optional — the sentinel runs
  * whichever detectors have sufficient data. This makes it easy to call
  * the rule auditor with varying levels of context availability.
  */
-export interface RuleAuditInput {
+export interface RuleSentinelInput {
     /** The chapter text to audit. */
     readonly chapterContent: string;
     /** 1-based chapter index for timeline sequencing checks. */
@@ -67,7 +67,7 @@ export interface RuleAuditInput {
     /** Asset catalog from prior chapters (for character presence checks). */
     readonly assetCatalog?: AssetCatalog;
 }
-export declare const RuleAuditInputSchema: z.ZodObject<{
+export declare const RuleSentinelInputSchema: z.ZodObject<{
     chapterContent: z.ZodString;
     chapterIndex: z.ZodOptional<z.ZodNumber>;
     currentState: z.ZodOptional<z.ZodString>;
@@ -93,8 +93,8 @@ export declare const RuleAuditInputSchema: z.ZodObject<{
  * Result of the rule-based audit.
  */
 export interface RuleAuditResult {
-    /** All detected issues (compatible with AuditIssue[]). */
-    readonly issues: readonly RuleAuditIssue[];
+    /** All detected issues (compatible with SentinelIssue[]). */
+    readonly issues: readonly RuleSentinelIssue[];
     /** Number of detectors that actually ran. */
     readonly detectorCount: number;
     /** One-line summary suitable for logging or CLI display. */

@@ -21,26 +21,55 @@ const APP_VERSION = pkg.version || "0.0.0";
 const RELEASE_DIR = process.env.TAVERNOS_RELEASE_DIR || "release";
 const OUTPUT_EXE = path.join(PROJECT_DIR, RELEASE_DIR, `TavernOS-Setup-${APP_VERSION}-x64.exe`);
 
-// --- Find makensis.exe in electron-builder cache ---
+// --- Find makensis.exe in electron-builder cache or system PATH ---
 function findMakensis() {
-  const cacheBase = path.join(os.homedir(), "AppData", "Local", "electron-builder", "Cache");
+  // 1. Try electron-builder cache (multiple possible locations)
+  const cacheDirs = [
+    path.join(os.homedir(), "AppData", "Local", "electron-builder", "Cache"),
+    path.join(os.homedir(), ".cache", "electron-builder"), // Linux/macOS style
+    // CI environments sometimes use TEMP
+    path.join(process.env.TEMP || os.tmpdir(), "electron-builder", "Cache"),
+  ];
 
-  if (!fs.existsSync(cacheBase)) {
-    throw new Error(`electron-builder cache not found at ${cacheBase}`);
-  }
-
-  // Look for nsis-* directory
-  const entries = fs.readdirSync(cacheBase);
-  for (const entry of entries) {
-    if (entry.startsWith("nsis")) {
-      // Search for makensis.exe in subdirectories
-      const nsisDir = path.join(cacheBase, entry);
-      const findResult = findFile(nsisDir, "makensis.exe");
-      if (findResult) return findResult;
+  for (const cacheBase of cacheDirs) {
+    if (fs.existsSync(cacheBase)) {
+      const entries = fs.readdirSync(cacheBase);
+      for (const entry of entries) {
+        if (entry.startsWith("nsis")) {
+          const nsisDir = path.join(cacheBase, entry);
+          const findResult = findFile(nsisDir, "makensis.exe");
+          if (findResult) return findResult;
+        }
+      }
     }
   }
 
-  throw new Error("makensis.exe not found in electron-builder cache. Run electron-builder first to download NSIS.");
+  // 2. Try node_modules/electron-builder's bundled NSIS
+  const nodeModulesNsis = path.join(PROJECT_DIR, "node_modules", "electron-builder", "node_modules");
+  if (fs.existsSync(nodeModulesNsis)) {
+    const result = findFile(nodeModulesNsis, "makensis.exe");
+    if (result) return result;
+  }
+
+  // 3. Try system PATH (NSIS might be installed globally, e.g. via choco)
+  try {
+    const which = execSync("where makensis.exe", { encoding: "utf8", stdio: "pipe" }).trim().split("\n")[0].trim();
+    if (which && fs.existsSync(which)) return which;
+  } catch {}
+
+  // 4. Try common NSIS install paths
+  const commonPaths = [
+    "C:\\Program Files\\NSIS\\makensis.exe",
+    "C:\\Program Files (x86)\\NSIS\\makensis.exe",
+  ];
+  for (const p of commonPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  throw new Error(
+    "makensis.exe not found. Tried electron-builder cache, node_modules, system PATH, and common install paths.\n" +
+    "Run electron-builder first to download NSIS, or install NSIS manually."
+  );
 }
 
 function findFile(dir, filename) {
@@ -87,7 +116,7 @@ function main() {
   const escapeArg = (p) => `"${String(p).replace(/"/g, '\\"')}"`;
   // Pass the version (read from package.json) to NSIS via -D so the script's
   // APP_VERSION define stays in sync with package.json without manual edits.
-  const nsisDefine = `-DAPP_VERSION=${APP_VERSION} -DRELEASE_DIR=${RELEASE_DIR}`;
+  const nsisDefine = `-DAPP_VERSION=${APP_VERSION} -DRELEASE_DIR=${RELEASE_DIR} -DPROJECT_ROOT=${PROJECT_DIR}`;
   console.log(`APP_VERSION: ${APP_VERSION}`);
   console.log("Compiling NSIS installer...");
   try {

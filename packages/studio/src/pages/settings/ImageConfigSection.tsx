@@ -69,6 +69,7 @@ export default function ImageConfigSection(): JSX.Element | null {
             });
           }}
           options={providers.map((p) => p.id)}
+          optionLabels={providers.map((p) => p.name)}
         />
 
         {(() => {
@@ -79,6 +80,7 @@ export default function ImageConfigSection(): JSX.Element | null {
               value={config.model}
               onChange={(v) => setConfig({ ...config, model: v })}
               options={ip.models.map((m) => m.id)}
+              optionLabels={ip.models.map((m) => m.name)}
             />
           ) : (
             <TextInput

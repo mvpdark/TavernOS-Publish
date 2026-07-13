@@ -6,7 +6,7 @@ import { VideoDownloader } from "./video-downloader.js";
 import type { EDLClip, Transition } from "./edl.js";
 import type { VideoPipelineInput, VideoPipelineResult, VideoPipelineCallbacks, VideoReviewConfig } from "./pipeline-types.js";
 import type { VideoClip } from "./types.js";
-import { CharacterConsistencyChecker } from "./character-consistency.js";
+import { CharacterSentinel } from "./character-consistency.js";
 /** Context shared across all stages within a single pipeline run. */
 export interface StageContext {
     readonly reviewConfig: VideoReviewConfig;
@@ -30,7 +30,7 @@ export interface StageContext {
     /** TTS audio URL for lip-sync. */
     readonly ttsAudioUrl?: string;
     /** Character consistency checker instance. */
-    readonly consistencyChecker?: CharacterConsistencyChecker;
+    readonly consistencyChecker?: CharacterSentinel;
 }
 /** Result of a single stage execution. */
 export interface StageResult<T = unknown> {
@@ -81,6 +81,8 @@ export declare class FrameCheckStage {
 }
 export interface ReviewStageInput {
     clip: VideoClip;
+    /** Attempt number (1-indexed) for callback reporting. */
+    attempt?: number;
 }
 export type ReviewStageOutput = VideoReviewResult;
 export declare class ReviewStage {

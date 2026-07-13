@@ -1,10 +1,6 @@
-// Async image generation client for the yunwu midjourney-proxy API.
+// Midjourney async client for the yunwu midjourney-proxy API.
 //
-// "Midjourney" is a trademark of Midjourney, Inc. This client communicates
-// with a third-party proxy service (yunwu midjourney-proxy) and is not
-// affiliated with or endorsed by Midjourney, Inc.
-//
-// Image generation is asynchronous: submit an imagine task, then poll the task
+// MJ generation is asynchronous: submit an imagine task, then poll the task
 // status until SUCCESS/FAILURE. This mirrors the flow verified against the
 // live yunwu API:
 //   POST {base}/mj/submit/imagine  → { code:1, result:"<taskId>" }

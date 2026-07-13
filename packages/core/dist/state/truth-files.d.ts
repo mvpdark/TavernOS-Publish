@@ -46,7 +46,7 @@ export declare function loadBookRules(projectRoot: string): Promise<string>;
 export declare function ensureBookRules(projectRoot: string, language?: StoryStateLanguage): Promise<string>;
 /**
  * Render a snapshot into a single markdown context block suitable for feeding
- * back into the planner/writer/auditor agents as "current truth".
+ * back into the planner/writer/sentinel agents as "current truth".
  */
 export declare function renderSnapshotProjection(snapshot: StoryStateSnapshot, language?: StoryStateLanguage): string;
 /**

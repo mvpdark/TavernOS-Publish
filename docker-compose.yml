@@ -2,21 +2,21 @@ version: '3.8'
 
 services:
   tavernos:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: ghcr.io/mvpdark/tavernos:latest
     ports:
-      - "3179:3179"
+      - "17776:17776"
     volumes:
       - tavernos-data:/data
       - ./projects:/app/projects
     environment:
       - TAVERNOS_DATA_DIR=/data
       - NODE_ENV=production
+      - PORT=17776
+      - HOST=0.0.0.0
+      - TAVERNOS_AUTH_TOKEN=${TAVERNOS_AUTH_TOKEN:-tavernos-default-auth-token-change-me}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3179/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:17776/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

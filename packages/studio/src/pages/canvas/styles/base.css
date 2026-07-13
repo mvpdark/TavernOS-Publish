@@ -1,0 +1,900 @@
+.kakashow-shell {
+  font-family:
+    "SF Pro Display",
+    "SF Pro Text",
+    "PingFang SC",
+    "Helvetica Neue",
+    "Segoe UI",
+    sans-serif;
+  color: #E8E8E8;
+  background: #0A0A0A;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+.kakashow-shell * {
+  box-sizing: border-box;
+}
+
+.kakashow-shell {
+  margin: 0;
+  min-height: 100%;
+}
+
+.kakashow-shell {
+  min-height: 100vh;
+  overflow: hidden;
+  color: #E8E8E8;
+  background: #0A0A0A;
+}
+
+.kakashow-shell:has(.view-settings) {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.kakashow-shell:has(.view-settings)::-webkit-scrollbar {
+  display: none;
+}
+
+.kakashow-shell button {
+  font: inherit;
+  color: inherit;
+}
+
+.kakashow-shell input,
+.kakashow-shell select,
+.kakashow-shell textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.kakashow-shell button,
+.kakashow-shell a,
+.kakashow-shell [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.kakashow-shell button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--kaka-selected-border, rgba(255, 255, 255, 0.42)) 70%, white 20%);
+  outline-offset: 3px;
+}
+
+.kakashow-shell textarea:focus-visible {
+  outline: 0;
+}
+
+.kakashow-shell {
+  --theme-bg-a: #0A0A0A;
+  --theme-bg-b: #0D0D0D;
+  --theme-glow-a: rgba(201, 168, 108, 0.04);
+  --theme-glow-b: rgba(201, 168, 108, 0.02);
+  --kaka-node-bg: #141414;
+  --kaka-panel-bg: #18181B;
+  --kaka-control-bg: #1C1C1E;
+  --kaka-surface-border: #1A1A1A;
+  --kaka-selected-border: rgba(201, 168, 108, 0.3);
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  background:
+    radial-gradient(circle at 86px 42px, var(--theme-glow-a), transparent 46%),
+    radial-gradient(circle at 74% 82%, var(--theme-glow-b), transparent 34%),
+    linear-gradient(135deg, var(--theme-bg-a), var(--theme-bg-b));
+  transition: background 520ms ease;
+  isolation: isolate;
+}
+
+.kakashow-shell.view-settings {
+  min-height: 100vh;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.kakashow-shell.view-settings::-webkit-scrollbar {
+  display: none;
+}
+
+.kakashow-shell.theme-emerald {
+  --theme-bg-a: #0A0A0A;
+  --theme-bg-b: #0D0D0D;
+  --theme-glow-a: rgba(201, 168, 108, 0.05);
+  --theme-glow-b: rgba(201, 168, 108, 0.02);
+  --kaka-node-bg: #141414;
+  --kaka-panel-bg: #18181B;
+  --kaka-control-bg: #1C1C1E;
+  --kaka-surface-border: #1A1A1A;
+  --kaka-selected-border: rgba(201, 168, 108, 0.3);
+}
+
+.kakashow-shell.theme-indigo {
+  --theme-bg-a: #0A0A0A;
+  --theme-bg-b: #0D0D0D;
+  --theme-glow-a: rgba(201, 168, 108, 0.05);
+  --theme-glow-b: rgba(201, 168, 108, 0.02);
+  --kaka-node-bg: #141414;
+  --kaka-panel-bg: #18181B;
+  --kaka-control-bg: #1C1C1E;
+  --kaka-surface-border: #1A1A1A;
+  --kaka-selected-border: rgba(201, 168, 108, 0.3);
+}
+
+.kakashow-shell.theme-black {
+  --theme-bg-a: #000;
+  --theme-bg-b: #090a0c;
+  --theme-glow-a: rgba(201, 168, 108, 0.03);
+  --theme-glow-b: rgba(201, 168, 108, 0.01);
+  --kaka-node-bg: #141414;
+  --kaka-panel-bg: #18181B;
+  --kaka-control-bg: #1C1C1E;
+  --kaka-surface-border: #1A1A1A;
+  --kaka-selected-border: rgba(201, 168, 108, 0.3);
+}
+
+.kakashow-shell.theme-cycle {
+  --theme-bg-a: #0A0A0A;
+  --theme-bg-b: #0D0D0D;
+  --theme-glow-a: rgba(201, 168, 108, 0.05);
+  --theme-glow-b: rgba(201, 168, 108, 0.02);
+  animation: cycle-surface-colors 300s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.hidden-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kakashow-shell.theme-cycle::before,
+.kakashow-shell.theme-cycle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+  will-change: opacity;
+}
+
+.kakashow-shell.theme-cycle::before {
+  background:
+    radial-gradient(circle at 86px 42px, rgba(201, 168, 108, 0.06), transparent 48%),
+    radial-gradient(circle at 74% 82%, rgba(201, 168, 108, 0.03), transparent 34%),
+    linear-gradient(135deg, #0A0A0A, #0D0D0D);
+  animation: cycle-indigo-crossfade 300s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.kakashow-shell.theme-cycle::after {
+  background:
+    radial-gradient(circle at 86px 42px, rgba(201, 168, 108, 0.04), transparent 50%),
+    radial-gradient(circle at 74% 82%, rgba(201, 168, 108, 0.02), transparent 34%),
+    linear-gradient(135deg, #000, #090a0c);
+  animation: cycle-black-crossfade 300s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.canvas-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(201, 168, 108, 0.06) 1px, transparent 1.35px);
+  background-size: 26px 26px;
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.view-workshop .canvas-grid,
+.view-workshop-browser .canvas-grid {
+  display: none;
+}
+
+.ffmpeg-install-float {
+  position: fixed;
+  right: 28px;
+  top: 88px;
+  z-index: 90;
+  width: min(440px, calc(100vw - 42px));
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(120, 138, 255, 0.28), transparent 44%),
+    linear-gradient(145deg, rgba(31, 33, 48, 0.96), rgba(16, 18, 28, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 28px 70px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(20px) saturate(1.12);
+  animation: style-panel-in 260ms cubic-bezier(0.16, 1, 0.24, 1) both;
+}
+
+.video-fusion-dialog {
+  position: fixed;
+  left: 50%;
+  top: 92px;
+  z-index: 95;
+  width: min(460px, calc(100vw - 42px));
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(86, 255, 201, 0.3), transparent 44%),
+    linear-gradient(145deg, rgba(24, 39, 36, 0.97), rgba(12, 19, 22, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(170, 255, 229, 0.18),
+    0 28px 70px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(22px) saturate(1.16);
+  animation: style-panel-in 260ms cubic-bezier(0.16, 1, 0.24, 1) both;
+}
+
+.video-fusion-dialog__orb {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(86, 255, 201, 0.96), rgba(145, 160, 255, 0.72));
+  color: #081815;
+  font-size: 13px;
+  font-weight: 1000;
+  box-shadow: 0 18px 34px rgba(35, 190, 150, 0.24);
+}
+
+.video-fusion-dialog__body {
+  display: grid;
+  gap: 6px;
+}
+
+.video-fusion-dialog__body span {
+  color: rgba(142, 255, 222, 0.76);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.video-fusion-dialog__body strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 16px;
+}
+
+.video-fusion-dialog__body p,
+.video-fusion-dialog__body small {
+  margin: 0;
+  color: rgba(226, 255, 246, 0.72);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.video-fusion-dialog__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.video-fusion-dialog__actions button {
+  border: 0;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.video-fusion-dialog__secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(236, 255, 249, 0.78);
+}
+
+.video-fusion-dialog__primary {
+  background: linear-gradient(135deg, rgba(86, 255, 201, 0.96), rgba(145, 160, 255, 0.72));
+  color: #081815;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.video-fusion-dialog__actions button:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
+.video-fusion-dialog__analysis {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(86, 255, 201, 0.18);
+}
+
+.video-fusion-dialog__analysis--loading {
+  color: rgba(142, 255, 222, 0.86);
+  font-size: 12px;
+}
+
+.video-fusion-dialog__analysis--error {
+  color: rgba(255, 120, 120, 0.9);
+  font-size: 12px;
+}
+
+.video-fusion-dialog__analysis strong {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(86, 255, 201, 0.96);
+  font-size: 12px;
+}
+
+.video-fusion-dialog__analysis pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(226, 255, 246, 0.82);
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+}
+
+.video-fusion-dialog__code-block {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid rgba(86, 255, 201, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.video-fusion-dialog__code-block pre {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(142, 255, 222, 0.9);
+  font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+}
+
+.ffmpeg-install-float__orb {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(145, 160, 255, 0.92), rgba(86, 255, 201, 0.68));
+  color: #10131a;
+  font-size: 13px;
+  font-weight: 1000;
+  box-shadow: 0 18px 34px rgba(68, 84, 182, 0.26);
+}
+
+.ffmpeg-install-float__body {
+  display: grid;
+  gap: 6px;
+}
+
+.ffmpeg-install-float__body span {
+  color: rgba(172, 190, 255, 0.74);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.ffmpeg-install-float__body strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 16px;
+}
+
+.ffmpeg-install-float__body p,
+.ffmpeg-install-float__body small {
+  margin: 0;
+  color: rgba(226, 234, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ffmpeg-install-float__body small {
+  color: rgba(193, 205, 236, 0.58);
+}
+
+.ffmpeg-install-float__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.ffmpeg-install-float__actions button {
+  border: 0;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.ffmpeg-install-float__secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(236, 241, 255, 0.78);
+}
+
+.ffmpeg-install-float__primary {
+  background: linear-gradient(135deg, rgba(145, 160, 255, 0.96), rgba(86, 255, 201, 0.72));
+  color: #10131a;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.ffmpeg-install-float__actions button:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
+@keyframes cycle-indigo-crossfade {
+  0%,
+  4% {
+    opacity: 0;
+  }
+  29.333%,
+  37.333% {
+    opacity: 1;
+  }
+  62.666%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cycle-black-crossfade {
+  0%,
+  29.333% {
+    opacity: 0;
+  }
+  62.666%,
+  70.666% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cycle-surface-colors {
+  0% {
+    --kaka-node-bg: #26312e;
+    --kaka-panel-bg: #202826;
+    --kaka-control-bg: #242d2a;
+    --kaka-surface-border: rgba(150, 255, 219, 0.12);
+    --kaka-selected-border: rgba(180, 255, 232, 0.42);
+  }
+  33.333% {
+    --kaka-node-bg: #25283a;
+    --kaka-panel-bg: #202236;
+    --kaka-control-bg: #242641;
+    --kaka-surface-border: rgba(155, 170, 255, 0.12);
+    --kaka-selected-border: rgba(188, 198, 255, 0.42);
+  }
+  66.666% {
+    --kaka-node-bg: #272729;
+    --kaka-panel-bg: #222226;
+    --kaka-control-bg: #232327;
+    --kaka-surface-border: rgba(255, 255, 255, 0.06);
+    --kaka-selected-border: rgba(240, 240, 240, 0.42);
+  }
+  100% {
+    --kaka-node-bg: #26312e;
+    --kaka-panel-bg: #202826;
+    --kaka-control-bg: #242d2a;
+    --kaka-surface-border: rgba(150, 255, 219, 0.12);
+    --kaka-selected-border: rgba(180, 255, 232, 0.42);
+  }
+}
+
+.canvas-header {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  z-index: 42;
+  transform: scale(var(--logo-fixed-scale, 1));
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.project-logo-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.project-logo-shell {
+  position: relative;
+  display: block;
+  width: 112px;
+  pointer-events: none;
+}
+
+.project-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.project-logo__icon-flow,
+.project-logo__icon-sheen {
+  display: none;
+}
+
+.view-landing .canvas-header,
+.view-canvas-browser .canvas-header,
+.view-workshop-browser .canvas-header,
+.view-workshop-workspace .canvas-header,
+.view-settings .canvas-header {
+  position: fixed;
+  z-index: 120;
+}
+.canvas-library-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 38;
+  background:
+    radial-gradient(circle at 120px 84px, rgba(90, 150, 255, 0.12), transparent 250px),
+    rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(2px);
+  animation: library-scrim-in 180ms ease-out both;
+}
+
+.canvas-library {
+  position: absolute;
+  top: 64px;
+  left: 18px;
+  width: min(560px, calc(100vw - 36px));
+  padding: 18px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(34, 38, 46, 0.78), rgba(15, 18, 24, 0.9)),
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(122, 177, 255, 0.08), transparent 38%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 28px 80px rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(32px) saturate(1.28);
+  transform-origin: 72px -28px;
+  animation: library-pop-in 420ms cubic-bezier(0.16, 1.16, 0.24, 1) both;
+}
+
+.canvas-library::before,
+.hidden-settings::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 82px;
+  width: 22px;
+  height: 22px;
+  transform: rotate(45deg);
+  border-radius: 6px 0 0;
+  background: rgba(45, 46, 52, 0.92);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.hidden-settings-scrim {
+  background:
+    radial-gradient(circle at 132px 92px, rgba(255, 255, 255, 0.1), transparent 230px),
+    rgba(0, 0, 0, 0.2);
+}
+
+.hidden-settings {
+  position: absolute;
+  top: 64px;
+  left: 18px;
+  width: min(390px, calc(100vw - 36px));
+  padding: 18px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(35, 39, 47, 0.78), rgba(15, 18, 24, 0.92)),
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.16), transparent 38%),
+    linear-gradient(135deg, rgba(112, 132, 255, 0.08), transparent 42%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 30px 80px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(32px) saturate(1.28);
+  transform-origin: 72px -28px;
+  animation: library-pop-in 420ms cubic-bezier(0.16, 1.16, 0.24, 1) both;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .canvas-library,
+  .hidden-settings {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 20px 54px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(18px) saturate(1.14);
+  }
+}
+
+.theme-choice-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+}
+
+.theme-choice {
+  --theme-swatch: linear-gradient(135deg, #4cffcf, #226f64, #061614);
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  animation: canvas-card-rise 420ms cubic-bezier(0.18, 0.9, 0.2, 1) both;
+  animation-delay: calc(90ms + var(--card-index) * 55ms);
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.theme-choice:hover,
+.theme-choice.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.theme-choice.is-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.07)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px color-mix(in srgb, var(--kaka-selected-border) 32%, white 10%),
+    0 16px 32px rgba(0, 0, 0, 0.18);
+}
+
+.theme-choice__swatch {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: var(--theme-swatch);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 10px 20px rgba(0, 0, 0, 0.24);
+}
+
+.theme-choice__copy {
+  min-width: 0;
+}
+
+.theme-choice__copy strong {
+  display: block;
+  font-size: 15px;
+}
+
+.theme-choice__copy small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+}
+
+.theme-choice__check {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.canvas-library__top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.canvas-library__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: rgba(193, 217, 255, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.canvas-library h2 {
+  margin: 0;
+  color: #f8f8fa;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.canvas-library__close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.canvas-library__close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.canvas-library__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.canvas-card {
+  --card-accent: linear-gradient(135deg, #55f1cf, #7c8cff, #ff8fc7);
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+  min-height: 124px;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.045)),
+    rgba(255, 255, 255, 0.03);
+  color: #f7f7f8;
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 34px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+  animation: canvas-card-rise 480ms cubic-bezier(0.18, 0.9, 0.2, 1) both;
+  animation-delay: calc(90ms + var(--card-index) * 55ms);
+}
+
+.canvas-card:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06)),
+    rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px) scale(1.015);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 24px 44px rgba(0, 0, 0, 0.22);
+}
+
+.canvas-card__preview {
+  position: relative;
+  grid-row: span 2;
+  border-radius: 17px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.2) 1px, transparent 1.25px),
+    var(--card-accent);
+  background-size: 13px 13px, auto;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.canvas-card__spark {
+  position: absolute;
+  inset: 12px 18px auto auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  filter: blur(0.2px);
+}
+
+.canvas-card__node {
+  position: absolute;
+  border-radius: 10px;
+  background: rgba(17, 18, 22, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.canvas-card__node--one {
+  left: 15px;
+  bottom: 18px;
+  width: 48px;
+  height: 36px;
+}
+
+.canvas-card__node--two {
+  right: 13px;
+  bottom: 35px;
+  width: 34px;
+  height: 50px;
+}
+
+.canvas-card__body {
+  min-width: 0;
+  align-self: end;
+}
+
+.canvas-card__body strong {
+  display: block;
+  overflow: hidden;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-card__body small {
+  display: block;
+  margin-top: 7px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.canvas-card__count {
+  align-self: end;
+  justify-self: start;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kakashow-shell:focus-within {
+    scroll-behavior: auto;
+  }
+
+  .kakashow-shell *,
+  .kakashow-shell *::before,
+  .kakashow-shell *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
+  .kakashow-shell.theme-cycle {
+    animation: none;
+  }
+}

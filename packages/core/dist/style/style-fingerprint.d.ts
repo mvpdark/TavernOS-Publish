@@ -51,7 +51,7 @@ export declare function generateFingerprint(text: string, profile?: StyleProfile
  */
 export declare function fingerprintSimilarity(a: StyleFingerprint, b: StyleFingerprint): number;
 /**
- * Generate a style matching guide for the writer.
+ * Generate a style matching guide for the scribe.
  * Compares target fingerprint with current text fingerprint,
  * produces actionable Chinese recommendations.
  *
